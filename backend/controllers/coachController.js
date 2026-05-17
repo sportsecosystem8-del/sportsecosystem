@@ -436,6 +436,9 @@ const updateTrainingRequest = asyncHandler(async (req, res) => {
           });
         }
       }
+    } else if (!session) {
+      schedulingNote =
+        'Request approved. No session was scheduled — pick a date and time when accepting to show the player on Weekly Schedule.';
     }
     await createAutoWeeklyPlanDraft(req.user.id, tr.player, draftDate, { ifExists: 'skip' });
     try {
