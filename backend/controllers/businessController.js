@@ -387,7 +387,17 @@ const addProductImage = asyncHandler(async (req, res) => {
 });
 
 const listOrders = asyncHandler(async (req, res) => {
-  const list = await Order.find({ businessOwner: req.user.id }).sort({ createdAt: -1 }).lean();
+  const list = await Order.find({ businessOwner: req.user.id })
+    .sort({ createdAt: -1 })
+    .populate({
+      path: 'player',
+      select: 'email createdAt',
+      populate: {
+        path: 'playerProfile',
+        select: 'fullName phone sportPreference skillLevel city address',
+      },
+    })
+    .lean();
   const data = await enrichOrderItemsWithImages(list, Product);
   res.json({ success: true, data });
 });

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import { playerBtnOutlineSm, playerBtnSm, playerField, playerLabel } from '../../components/player/playerClassNames';
-import { previewVerificationDocument, previewVerificationDocumentError } from '../../utils/previewVerificationDocument';
+import DocumentPreviewModal from '../../components/DocumentPreviewModal';
+import { useVerificationDocumentPreview } from '../../hooks/useVerificationDocumentPreview';
+import { previewVerificationDocumentError } from '../../utils/verificationDocument';
 import StripePaySection, { stripePublishableConfigured } from '../../components/payment/StripePaySection';
 import CoachAvatar from '../../components/CoachAvatar';
 import { api, getErrorMessage } from '../../services/api';
@@ -21,18 +23,20 @@ export default function PlayerCoaches() {
   const [intentLoading, setIntentLoading] = useState(false);
   const [certPicker, setCertPicker] = useState(null);
   const [certLoadingId, setCertLoadingId] = useState(null);
+  const docPreview = useVerificationDocumentPreview();
 
   const useStripeFlow = stripePublishableConfigured();
 
   const openCertificate = async (coachId, doc) => {
     setErr('');
+    docPreview.clearError();
     try {
-      await previewVerificationDocument(
+      await docPreview.view(
         `/players/coaches/${coachId}/certificates/${doc._id}/file`,
         doc.originalName || 'certificate'
       );
     } catch (e) {
-      setErr(previewVerificationDocumentError(e));
+      setErr(e.message || previewVerificationDocumentError(e));
     }
   };
 
@@ -252,7 +256,7 @@ export default function PlayerCoaches() {
               ) : null}
               </div>
             </div>
-            <div className="flex flex-col gap-2 sm:w-56">
+            <div className="flex w-full flex-col gap-2 border-t border-white/10 pt-4 sm:w-56 sm:border-0 sm:pt-0">
               {(() => {
                 const action = coachRequestAction(row.userId);
                 return (
@@ -332,19 +336,33 @@ export default function PlayerCoaches() {
         ) : null}
       </ul>
 
+      <DocumentPreviewModal
+        open={Boolean(docPreview.preview)}
+        title="Certificate preview"
+        fileName={docPreview.preview?.originalName}
+        blobUrl={docPreview.preview?.blobUrl}
+        mimeType={docPreview.preview?.mimeType}
+        onClose={docPreview.close}
+        onDownload={docPreview.download}
+      />
+
       {certPicker ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="cert-picker-title"
+          onClick={() => setCertPicker(null)}
         >
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-player-container p-5 shadow-xl">
+          <div
+            className="max-h-[85dvh] w-full overflow-hidden rounded-t-2xl border border-white/10 bg-player-container p-4 shadow-xl sm:max-w-md sm:rounded-xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <p id="cert-picker-title" className="font-headline text-xs font-bold uppercase tracking-wider text-player-green">
               Verified certificates
             </p>
             <p className="mt-1 text-sm text-player-on-variant">Select a document to open.</p>
-            <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+            <ul className="mt-4 max-h-[50dvh] space-y-2 overflow-y-auto sm:max-h-64">
               {certPicker.docs.map((doc) => (
                 <li key={doc._id}>
                   <button

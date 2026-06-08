@@ -1,6 +1,7 @@
+import DocumentPreviewModal from '../DocumentPreviewModal';
+import { useVerificationDocumentPreview } from '../../hooks/useVerificationDocumentPreview';
 import { adminBtnCompactGhost, adminBtnCompactPrimary } from './adminClassNames';
 import { api, getErrorMessage } from '../../services/api';
-import { previewVerificationDocument, previewVerificationDocumentError } from '../../utils/previewVerificationDocument';
 
 function statusPill(status) {
   if (status === 'approved') return 'bg-emerald-500/15 text-emerald-400';
@@ -9,11 +10,13 @@ function statusPill(status) {
 }
 
 export default function AdminVerificationDocumentList({ documents, onChanged }) {
+  const docPreview = useVerificationDocumentPreview();
+
   const preview = async (docId, originalName) => {
     try {
-      await previewVerificationDocument(`/admin/verification/documents/${docId}/file`, originalName);
+      await docPreview.view(`/admin/verification/documents/${docId}/file`, originalName);
     } catch (e) {
-      alert(previewVerificationDocumentError(e));
+      alert(e.message || 'Could not open document.');
     }
   };
 
@@ -41,6 +44,16 @@ export default function AdminVerificationDocumentList({ documents, onChanged }) 
   }
 
   return (
+    <>
+      <DocumentPreviewModal
+        open={Boolean(docPreview.preview)}
+        title="Document preview"
+        fileName={docPreview.preview?.originalName}
+        blobUrl={docPreview.preview?.blobUrl}
+        mimeType={docPreview.preview?.mimeType}
+        onClose={docPreview.close}
+        onDownload={docPreview.download}
+      />
     <div className="mt-4 border-t border-white/10 pt-4">
       <p className="font-headline text-[11px] font-bold uppercase tracking-wider text-slate-400">Uploaded documents</p>
       <ul className="mt-3 space-y-3">
@@ -76,5 +89,6 @@ export default function AdminVerificationDocumentList({ documents, onChanged }) 
         ))}
       </ul>
     </div>
+    </>
   );
 }

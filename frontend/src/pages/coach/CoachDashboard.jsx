@@ -45,6 +45,7 @@ export default function CoachDashboard() {
   return (
     <div className="space-y-8 text-player-on-surface">
       <section className="midnight-asymmetric relative overflow-hidden bg-gradient-to-r from-[#a04100] to-[#ff7524] px-6 py-8 shadow-player-hero md:px-10">
+        <div className="landing-pitch-lines absolute inset-0 opacity-20" />
         <div className="absolute -right-10 -top-6 text-[180px] text-white/10">
           <span className="material-symbols-outlined">sports_cricket</span>
         </div>
@@ -217,7 +218,7 @@ export default function CoachDashboard() {
         <div className="midnight-asymmetric bg-player-container p-6 shadow-player-card">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="font-headline text-xl font-bold uppercase tracking-[0.08em] text-white">Top Performers</h2>
-            <Link to="/coach/sessions" className="font-headline text-[10px] uppercase tracking-widest text-[#ff7524] hover:underline">
+            <Link to="/coach/performance" className="font-headline text-[10px] uppercase tracking-widest text-[#ff7524] hover:underline">
               Add scores
             </Link>
           </div>
@@ -240,7 +241,7 @@ export default function CoachDashboard() {
             </ul>
           ) : (
             <p className="text-sm text-slate-500">
-              No performance scores yet. Mark attendance and add weekly points from your sessions.
+              No performance scores yet. Add weekly evaluations from the Evaluations page.
             </p>
           )}
         </div>

@@ -201,6 +201,10 @@ export default function PlayerDashboard() {
 
       <section className="mb-10">
         <div className="relative flex min-h-[240px] flex-col items-center justify-between gap-6 overflow-hidden bg-gradient-to-r from-[#0a5230] via-[#0a6b45] to-player-green p-8 midnight-asymmetric shadow-2xl md:min-h-[200px] md:flex-row md:items-center">
+          <div className="landing-pitch-lines absolute inset-0 opacity-25" />
+          <span className="material-symbols-outlined pointer-events-none absolute -right-4 -top-2 text-[140px] text-white/10">
+            stadium
+          </span>
           <div className="z-10 w-full text-center md:text-left">
             <h1 className="mb-2 font-display text-4xl uppercase tracking-tight text-white md:text-6xl lg:text-7xl">
               Welcome back, {first}

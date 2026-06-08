@@ -114,6 +114,55 @@ export default function AdminDashboard() {
 
   return (
     <div>
+      <section className="midnight-asymmetric relative mb-8 overflow-hidden bg-gradient-to-r from-[#00363d] via-[#0a4f5c] to-admin-cyan/70 px-6 py-8 shadow-admin-glow md:px-10">
+        <div className="landing-pitch-lines absolute inset-0 opacity-25" />
+        <span className="material-symbols-outlined pointer-events-none absolute -right-4 -top-2 text-[150px] text-white/10">
+          stadium
+        </span>
+        <span className="material-symbols-outlined pointer-events-none absolute bottom-4 left-8 animate-float text-4xl text-player-green/20">
+          sports_cricket
+        </span>
+        <span className="material-symbols-outlined pointer-events-none absolute right-20 top-8 animate-float-reverse text-4xl text-[#00E5FF]/20">
+          sports_tennis
+        </span>
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="font-orbitron text-[10px] uppercase tracking-[0.3em] text-admin-cyan/90">Sports ecosystem · Platform ops</p>
+            <h1 className="portal-hero-glow mt-2 font-display text-4xl uppercase tracking-tight text-white md:text-5xl">
+              Arena Command Center
+            </h1>
+            <p className="mt-2 font-headline text-sm uppercase tracking-[0.16em] text-white/75">
+              Cricket & badminton — players, coaches, grounds & commerce
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { icon: 'groups', label: `${d?.users?.players ?? '—'} Players` },
+                { icon: 'sports_soccer', label: `${d?.users?.coaches ?? '—'} Coaches` },
+                { icon: 'storefront', label: `${d?.users?.businesses ?? '—'} Stores` },
+              ].map((badge) => (
+                <span
+                  key={badge.label}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/25 px-3 py-1 font-headline text-[10px] font-bold uppercase tracking-wider text-white/90 backdrop-blur-sm"
+                >
+                  <AdminIcon name={badge.icon} className="text-sm text-admin-cyan" />
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/admin/verification/coaches" className={adminBtnPrimary}>
+              <AdminIcon name="verified_user" className="text-lg" />
+              Verify coaches
+            </Link>
+            <Link to="/admin/monitor/bookings" className={adminBtnSecondary}>
+              <AdminIcon name="event_note" className="text-lg" />
+              Bookings
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <AdminPageHeader
         title="Overview"
         subtitle="Platform health, verification queue, and activity at a glance."

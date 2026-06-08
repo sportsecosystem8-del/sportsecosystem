@@ -55,6 +55,61 @@ export default {
         'player-card': '1.5rem',
         'player-nested': '1rem',
       },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+          '50%': { transform: 'translateY(-14px) rotate(3deg)' },
+        },
+        'float-reverse': {
+          '0%, 100%': { transform: 'translateY(-8px) rotate(-2deg)' },
+          '50%': { transform: 'translateY(6px) rotate(2deg)' },
+        },
+        'pulse-glow': {
+          '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
+          '50%': { opacity: '0.85', transform: 'scale(1.05)' },
+        },
+        marquee: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        'fade-up': {
+          '0%': { opacity: '0', transform: 'translateY(28px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'bounce-ball': {
+          '0%, 100%': { transform: 'translateY(0) scale(1)' },
+          '50%': { transform: 'translateY(-32px) scale(0.95)' },
+        },
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% center' },
+          '100%': { backgroundPosition: '200% center' },
+        },
+        'floodlight-sweep': {
+          '0%, 100%': { opacity: '0.15' },
+          '50%': { opacity: '0.45' },
+        },
+        'score-flash': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.6' },
+        },
+      },
+      animation: {
+        float: 'float 5s ease-in-out infinite',
+        'float-reverse': 'float-reverse 6s ease-in-out infinite',
+        'float-delayed': 'float 5s ease-in-out 1.5s infinite',
+        'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
+        marquee: 'marquee 28s linear infinite',
+        'fade-up': 'fade-up 0.8s ease-out forwards',
+        'bounce-ball': 'bounce-ball 1.8s ease-in-out infinite',
+        'spin-slow': 'spin-slow 20s linear infinite',
+        shimmer: 'shimmer 4s linear infinite',
+        'floodlight-sweep': 'floodlight-sweep 4s ease-in-out infinite',
+        'score-flash': 'score-flash 2s ease-in-out infinite',
+      },
       boxShadow: {
         'player-sidebar': '4px 0 24px rgba(0,0,0,0.5)',
         'player-stadium': '0 0 40px -10px rgba(0, 255, 135, 0.15)',

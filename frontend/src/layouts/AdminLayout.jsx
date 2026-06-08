@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import AdminIcon from '../components/admin/AdminIcon';
+import PortalAtmosphere from '../components/PortalAtmosphere';
 import { useAuth } from '../hooks/useAuth';
 
 function navLinkClass({ isActive }) {
@@ -75,16 +76,17 @@ function SidebarContent({ onNavigate }) {
   return (
     <>
       <div className="p-8 pb-6">
-        <Link
-          to="/admin"
-          onClick={onNavigate}
-          className="block font-orbitron text-2xl font-black tracking-tighter text-admin-cyan"
-        >
-          SEP
+        <Link to="/admin" onClick={onNavigate} className="group flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-admin-cyan/30 to-admin-cyan-deep/20 ring-1 ring-admin-cyan/30 transition group-hover:scale-105">
+            <AdminIcon name="stadium" className="text-xl text-admin-cyan" />
+          </span>
+          <div>
+            <p className="font-headline text-lg font-black uppercase tracking-tight text-white">
+              Sports <span className="text-admin-cyan">Ecosystem</span>
+            </p>
+            <p className="font-orbitron text-[10px] uppercase tracking-[0.2em] text-admin-cyan/70">Admin · Control</p>
+          </div>
         </Link>
-        <p className="mt-1 font-headline text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-          Admin Control
-        </p>
       </div>
 
       <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto admin-scrollbar px-2">
@@ -139,7 +141,8 @@ export default function AdminLayout() {
   const headerInitials = useMemo(() => avatarInitials(user?.email), [user?.email]);
 
   return (
-    <div className="admin-app flex min-h-screen">
+    <div className="admin-app relative flex min-h-screen">
+      <PortalAtmosphere variant="admin" />
       {mobileOpen ? (
         <button
           type="button"
@@ -149,7 +152,7 @@ export default function AdminLayout() {
         />
       ) : null}
 
-      <aside className="shadow-admin-sidebar z-50 hidden h-screen min-h-0 w-[260px] shrink-0 flex-col bg-admin-canvas md:fixed md:inset-y-0 md:left-0 md:flex md:flex-col">
+      <aside className="shadow-admin-sidebar z-50 hidden h-screen min-h-0 w-[260px] shrink-0 flex-col border-r border-admin-cyan/10 bg-admin-canvas/95 backdrop-blur-xl md:fixed md:inset-y-0 md:left-0 md:flex md:flex-col">
         <SidebarContent />
       </aside>
 
@@ -161,7 +164,7 @@ export default function AdminLayout() {
         <SidebarContent onNavigate={() => setMobileOpen(false)} />
       </aside>
 
-      <div className="flex min-h-screen w-full min-w-0 flex-1 flex-col md:ml-[260px]">
+      <div className="relative z-10 flex min-h-screen w-full min-w-0 flex-1 flex-col md:ml-[260px]">
         <header className="fixed left-0 right-0 top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-800/50 bg-admin-canvas/80 px-4 backdrop-blur-xl md:left-[260px] md:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-6">
             <button
@@ -172,8 +175,10 @@ export default function AdminLayout() {
             >
               <AdminIcon name="menu" />
             </button>
-            <h2 className="hidden font-orbitron text-xs font-bold uppercase tracking-widest text-admin-cyan sm:block">
-              Admin Control Panel
+            <h2 className="hidden items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.16em] text-admin-cyan sm:flex">
+              <AdminIcon name="sports_soccer" className="text-lg" />
+              Platform Command Center
+              <AdminIcon name="leaderboard" className="text-lg" />
             </h2>
             <div className="relative hidden max-w-xs flex-1 group sm:block md:max-w-md">
               <AdminIcon
@@ -215,7 +220,7 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden px-4 pb-10 pt-20 admin-scrollbar md:px-8 md:pb-12">
+        <main className="relative z-10 flex-1 overflow-x-hidden px-4 pb-10 pt-20 admin-scrollbar md:px-8 md:pb-12">
           <Outlet />
         </main>
       </div>

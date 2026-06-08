@@ -137,3 +137,165 @@ body {
 .player-app .player-header-glow {
   box-shadow: 0 4px 20px rgba(0, 255, 135, 0.05);
 }
+
+/* Landing — stadium night hero */
+.landing-app {
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.landing-app .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.landing-pitch-lines {
+  background-image:
+    linear-gradient(90deg, rgba(0, 255, 135, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(0, 255, 135, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 100%, black 20%, transparent 75%);
+}
+
+.landing-court-arc {
+  border: 2px solid rgba(0, 255, 135, 0.12);
+  border-radius: 50%;
+}
+
+.landing-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #cc97ff 0%,
+    #00ff87 25%,
+    #fff 50%,
+    #00ff87 75%,
+    #cc97ff 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-stat-glow {
+  text-shadow: 0 0 32px rgba(0, 255, 135, 0.35), 0 0 64px rgba(168, 85, 247, 0.2);
+}
+
+.landing-card-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-card-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.04) 50%,
+    transparent 60%
+  );
+  transform: translateX(-100%);
+  animation: landing-shine 6s ease-in-out infinite;
+}
+
+@keyframes landing-shine {
+  0%,
+  100% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes landing-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-fade-up-1 {
+  animation: landing-fade-up 0.7s ease-out 0.1s forwards;
+  opacity: 0;
+}
+.landing-fade-up-2 {
+  animation: landing-fade-up 0.7s ease-out 0.25s forwards;
+  opacity: 0;
+}
+.landing-fade-up-3 {
+  animation: landing-fade-up 0.7s ease-out 0.4s forwards;
+  opacity: 0;
+}
+.landing-fade-up-4 {
+  animation: landing-fade-up 0.7s ease-out 0.55s forwards;
+  opacity: 0;
+}
+.landing-fade-up-5 {
+  animation: landing-fade-up 0.7s ease-out 0.7s forwards;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-app *,
+  .landing-app *::before,
+  .landing-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Business portal — sports commerce shell */
+.business-app {
+  @apply min-h-screen antialiased;
+  font-family: Inter, system-ui, sans-serif;
+  background-color: #070e1d;
+  color: #dfe5fb;
+}
+
+.business-app .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.business-app .business-glass {
+  background: rgba(17, 25, 44, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.business-app .business-stat-glow {
+  text-shadow: 0 0 24px rgba(204, 151, 255, 0.25);
+}
+
+.business-app .business-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.business-app .business-scrollbar::-webkit-scrollbar-track {
+  background: #070e1d;
+}
+.business-app .business-scrollbar::-webkit-scrollbar-thumb {
+  background: #1e2538;
+  border-radius: 10px;
+}
+.business-app .business-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #cc97ff;
+}
+
+/* Portal dashboards — broadcast headline glow */
+.portal-hero-glow {
+  text-shadow: 0 0 40px rgba(0, 255, 135, 0.15), 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-app .material-symbols-outlined[class*='animate-'],
+  .business-app .material-symbols-outlined[class*='animate-'],
+  .admin-app .material-symbols-outlined[class*='animate-'] {
+    animation: none !important;
+  }
+}

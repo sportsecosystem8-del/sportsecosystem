@@ -4,6 +4,7 @@ import { api, getErrorMessage } from '../../services/api';
 export default function CoachRequests() {
   const [list, setList] = useState([]);
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
   const [scheduledAtById, setScheduledAtById] = useState({});
 
   const load = () =>
@@ -18,16 +19,34 @@ export default function CoachRequests() {
 
   const act = async (id, status) => {
     const selected = scheduledAtById[id];
+    if (status === 'accepted' && !selected) {
+      const ok = window.confirm(
+        'No schedule time selected. The request will be accepted but the player will not appear on Weekly Schedule until you accept with a date and time. Continue?',
+      );
+      if (!ok) return;
+    }
     const body =
       status === 'accepted' && selected
         ? { status, scheduledAt: new Date(selected).toISOString() }
         : { status };
     try {
-      await api.patch(`/coaches/training-requests/${id}`, body);
+      const res = await api.patch(`/coaches/training-requests/${id}`, body);
       setErr('');
+      const note = res.data?.data?.schedulingNote;
+      const session = res.data?.data?.session;
+      if (note) {
+        setInfo(note);
+      } else if (status === 'accepted' && session) {
+        setInfo('Request accepted and session scheduled. The player will appear on Weekly Schedule.');
+      } else if (status === 'accepted') {
+        setInfo('');
+      } else {
+        setInfo('');
+      }
       setScheduledAtById((prev) => ({ ...prev, [id]: '' }));
       load();
     } catch (e) {
+      setInfo('');
       setErr(getErrorMessage(e));
     }
   };
@@ -41,6 +60,11 @@ export default function CoachRequests() {
         </div>
       </div>
       {err && <p className="text-sm text-red-400 mt-2">{err}</p>}
+      {info && (
+        <div className="mt-4 border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="status">
+          {info}
+        </div>
+      )}
       <ul className="mt-4 grid gap-6 xl:grid-cols-2">
         {list.map((r) => (
           <li key={r._id} className="midnight-asymmetric relative overflow-hidden border-l-4 border-[#ff7524] bg-player-surface p-6 shadow-player-card">
@@ -67,7 +91,7 @@ export default function CoachRequests() {
             {r.status === 'pending' ? (
               <div className="mb-5 space-y-2">
                 <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                  Optional schedule time
+                  Schedule time (for Weekly Schedule)
                 </label>
                 <input
                   type="datetime-local"
@@ -76,7 +100,7 @@ export default function CoachRequests() {
                   onChange={(e) => setScheduledAtById((prev) => ({ ...prev, [r._id]: e.target.value }))}
                 />
                 <p className="text-xs text-slate-500">
-                  Leave empty to use default time. Pick another slot if you get a 90-minute conflict.
+                  Required to add the player to Weekly Schedule. Pick another slot if you get a 90-minute conflict.
                 </p>
               </div>
             ) : null}

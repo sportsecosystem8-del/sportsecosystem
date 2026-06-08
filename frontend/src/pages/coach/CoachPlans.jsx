@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { coachBtnPrimary, coachLabel, coachSelect } from '../../components/coach/coachClassNames';
 import { api, getErrorMessage } from '../../services/api';
+import { studentsFromAcceptedRequests } from '../../utils/coachStudents';
 
 const fieldClass =
   'w-full border-b-2 border-player-inner bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]';
@@ -20,24 +21,6 @@ function mondayInputValue(d = new Date()) {
   const diff = date.getDate() - day + (day === 0 ? -6 : 1);
   date.setDate(diff);
   return date.toISOString().slice(0, 10);
-}
-
-function studentsFromAcceptedRequests(requests) {
-  const seen = new Set();
-  const list = [];
-  for (const tr of requests) {
-    if (tr.status !== 'accepted') continue;
-    const playerId = String(tr.player?._id || tr.player || '');
-    if (!playerId || seen.has(playerId)) continue;
-    seen.add(playerId);
-    list.push({
-      playerId,
-      fullName: tr.player?.playerProfile?.fullName || tr.player?.email || 'Player',
-      sportPreference: tr.player?.playerProfile?.sportPreference || '',
-      city: tr.player?.playerProfile?.city || '',
-    });
-  }
-  return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
 /** Weekly plans; publish auto-drafts */

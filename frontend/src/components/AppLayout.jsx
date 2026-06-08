@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import HeaderNotificationBell from './HeaderNotificationBell';
+import PortalAtmosphere from './PortalAtmosphere';
 
 const linkCls = ({ isActive }) =>
   `block rounded-lg px-3 py-2 text-sm font-medium ${isActive ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`;
@@ -47,14 +48,16 @@ export default function AppLayout() {
   if (isCoach) {
     return (
       <div className="player-app relative min-h-screen bg-player-bg pb-16 md:pb-0">
-        <div className="pointer-events-none fixed inset-0 z-0">
-          <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-[#FF6B00]/20 blur-[110px]" />
-          <div className="absolute inset-0 opacity-[0.02] [background-image:radial-gradient(#fff_0.6px,transparent_0.6px)] [background-size:3px_3px]" />
-        </div>
-        <aside className="fixed inset-y-0 left-0 z-50 hidden h-screen w-64 flex-col bg-[#080D1A] shadow-player-sidebar md:flex">
+        <PortalAtmosphere variant="coach" />
+        <aside className="fixed inset-y-0 left-0 z-50 hidden h-screen w-64 flex-col border-r border-[#FF6B00]/15 bg-[#080D1A]/95 shadow-player-sidebar backdrop-blur-xl md:flex">
           <div className="shrink-0 px-6 pb-6 pt-8">
-            <p className="font-display text-3xl tracking-[0.12em] text-[#FF6B00]">COACH PORTAL</p>
-            <p className="font-headline text-[11px] uppercase tracking-[0.25em] text-slate-500">Elite Performance</p>
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF6B00] to-[#ff7524] shadow-[0_0_20px_rgba(255,107,0,0.3)]">
+              <span className="material-symbols-outlined text-xl text-black">military_tech</span>
+            </div>
+            <p className="font-headline text-xl font-black uppercase tracking-tight text-white">
+              Sports <span className="text-[#FF6B00]">Ecosystem</span>
+            </p>
+            <p className="font-orbitron text-[10px] uppercase tracking-[0.2em] text-[#FF6B00]/80">Coach · Elite Performance</p>
           </div>
           <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-0 pb-2 player-scrollbar">
             {items.map((item) => (
@@ -114,7 +117,11 @@ export default function AppLayout() {
 
         <header className="fixed left-0 right-0 top-0 z-40 h-16 border-b border-player-inner/60 bg-[#080D1A]/85 px-4 backdrop-blur-xl md:left-64 md:px-8">
           <div className="flex h-full items-center justify-between">
-            <p className="font-display text-3xl tracking-[0.1em] text-[#FF6B00]">MIDNIGHT STADIUM</p>
+            <p className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.18em] text-[#FF6B00]">
+              <span className="material-symbols-outlined text-lg">sports_cricket</span>
+              Coach Command Center
+              <span className="material-symbols-outlined text-lg">fitness_center</span>
+            </p>
             <div className="flex items-center gap-4">
               <HeaderNotificationBell to="/coach/notifications" listPath="/coaches/notifications" />
               <div className="hidden text-right md:block">
@@ -136,25 +143,29 @@ export default function AppLayout() {
 
   if (isBusiness) {
     return (
-      <div className="relative min-h-screen bg-[#070e1d] text-[#dfe5fb]">
-        <div className="pointer-events-none fixed inset-0 z-0">
-          <div className="absolute -top-16 right-0 h-80 w-80 rounded-full bg-[#A855F7]/20 blur-[120px]" />
-          <div className="absolute inset-0 opacity-[0.03] [background-image:radial-gradient(#fff_0.6px,transparent_0.6px)] [background-size:3px_3px]" />
-        </div>
-        <aside className="fixed inset-y-0 left-0 z-50 hidden w-[240px] flex-col bg-[#0b1324] md:flex">
+      <div className="business-app relative min-h-screen">
+        <PortalAtmosphere variant="business" />
+        <aside className="fixed inset-y-0 left-0 z-50 hidden w-[260px] flex-col border-r border-[#A855F7]/15 bg-[#0b1324]/95 shadow-[4px_0_24px_rgba(0,0,0,0.5)] backdrop-blur-xl md:flex">
           <div className="px-6 py-8">
-            <p className="font-headline text-3xl font-black uppercase tracking-tight text-[#A855F7]">Sports Ecosystem</p>
-            <p className="mt-1 font-body text-[10px] uppercase tracking-[0.2em] text-slate-500">Elite Management</p>
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#cc97ff] to-[#9c48ea] shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+              <span className="material-symbols-outlined text-xl text-[#360061]">storefront</span>
+            </div>
+            <p className="font-headline text-xl font-black uppercase tracking-tight text-white">
+              Sports <span className="text-[#cc97ff]">Ecosystem</span>
+            </p>
+            <p className="mt-1 font-orbitron text-[10px] uppercase tracking-[0.2em] text-[#cc97ff]/70">Business · Sports Gear</p>
           </div>
-          <nav className="space-y-1">
+          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto business-scrollbar px-1">
             {items.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all ${
-                    isActive ? 'border-l-4 border-[#A855F7] bg-[#11192c] text-[#A855F7]' : 'text-slate-400 hover:bg-[#1c253b] hover:text-white'
+                  `flex items-center gap-3 px-5 py-3.5 font-headline text-sm font-semibold uppercase tracking-wide transition-all ${
+                    isActive
+                      ? 'border-l-4 border-[#A855F7] bg-[#11192c] text-[#cc97ff] shadow-[0_0_20px_rgba(168,85,247,0.1)]'
+                      : 'text-slate-400 hover:bg-[#1c253b] hover:text-white'
                   }`
                 }
               >
@@ -190,13 +201,22 @@ export default function AppLayout() {
             </button>
           </div>
         </aside>
-        <header className="fixed left-0 right-0 top-0 z-40 bg-[#070e1d]/80 px-8 py-4 shadow-[0_4px_24px_rgba(54,0,97,0.08)] backdrop-blur-xl md:left-[240px]">
-          <div className="flex items-center justify-between">
-            <div className="relative hidden w-full max-w-md lg:block">
+        <header className="fixed left-0 right-0 top-0 z-40 h-16 border-b border-white/[0.06] bg-[#070e1d]/85 px-4 backdrop-blur-xl md:left-[260px] md:px-8">
+          <div className="flex h-full items-center justify-between gap-4">
+            <p className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.16em] text-[#cc97ff]">
+              <span className="material-symbols-outlined text-lg">shopping_bag</span>
+              Sports Commerce Hub
+            </p>
+            <div className="relative hidden max-w-xs flex-1 lg:block">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">search</span>
-              <input className="w-full rounded-xl border-none bg-black/40 py-2 pl-10 pr-4 text-sm text-white focus:ring-1 focus:ring-[#cc97ff]" placeholder="Search Ecosystem..." />
+              <input
+                className="w-full rounded-xl border border-white/[0.06] bg-black/40 py-2 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 focus:ring-1 focus:ring-[#cc97ff]"
+                placeholder="Search products, orders..."
+                readOnly
+                aria-label="Search (visual only)"
+              />
             </div>
-            <div className="ml-auto flex items-center gap-4 text-slate-400">
+            <div className="flex items-center gap-4 text-slate-400">
               <HeaderNotificationBell
                 to="/business/notifications"
                 listPath="/business/notifications"
@@ -206,7 +226,7 @@ export default function AppLayout() {
             </div>
           </div>
         </header>
-        <main className="relative z-10 min-h-screen px-6 pb-10 pt-24 md:ml-[240px] md:px-8">
+        <main className="relative z-10 min-h-screen px-6 pb-10 pt-24 md:ml-[260px] md:px-8">
           <Outlet />
         </main>
       </div>

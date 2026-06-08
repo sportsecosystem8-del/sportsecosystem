@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import PortalAtmosphere from '../components/PortalAtmosphere';
 import PlayerIcon from '../components/player/PlayerIcon';
 import { useAuth } from '../hooks/useAuth';
 
@@ -61,18 +62,19 @@ function SidebarBody({ onNavigate }) {
   return (
     <>
       <div className="mb-10 flex items-center gap-3 px-6">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-player-green">
-          <PlayerIcon name="sports_cricket" className="text-lg text-player-bg" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-player-green to-player-cyan shadow-[0_0_20px_rgba(0,255,135,0.25)]">
+          <PlayerIcon name="stadium" className="text-lg text-player-bg" />
         </div>
         <div className="min-w-0">
           <Link
             to="/player"
             onClick={onNavigate}
-            className="block font-display text-xl leading-none tracking-widest text-player-green"
+            className="block font-headline text-lg font-black uppercase leading-none tracking-tight text-white"
           >
-            STADIUM ELITE
+            Sports{' '}
+            <span className="text-player-green">Ecosystem</span>
           </Link>
-          <p className="text-[10px] font-headline uppercase tracking-tighter text-slate-500">Player access</p>
+          <p className="text-[10px] font-orbitron uppercase tracking-[0.2em] text-player-green/70">Player · Arena</p>
         </div>
       </div>
 
@@ -116,10 +118,11 @@ export default function PlayerLayout() {
   const headerAv = useMemo(() => initials(user), [user]);
 
   const shellAside =
-    'fixed left-0 top-0 z-[60] flex h-full w-[260px] flex-col bg-player-surface py-8 pl-0 pr-0 pt-20 shadow-[4px_0_24px_rgba(0,0,0,0.8)]';
+    'fixed left-0 top-0 z-[60] flex h-full w-[260px] flex-col border-r border-player-green/10 bg-player-surface/95 py-8 pl-0 pr-0 pt-20 shadow-player-sidebar backdrop-blur-xl';
 
   return (
-    <div className="player-app min-h-screen">
+    <div className="player-app relative min-h-screen">
+      <PortalAtmosphere variant="player" />
       <header className="fixed left-0 right-0 top-0 z-50 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-player-inner/50 bg-player-bg/80 px-4 backdrop-blur-xl md:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-8">
           <button
@@ -130,7 +133,11 @@ export default function PlayerLayout() {
           >
             <PlayerIcon name="menu" />
           </button>
-          <span className="hidden font-display text-2xl tracking-widest text-player-green lg:inline">MIDNIGHT STADIUM</span>
+          <span className="hidden items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.2em] text-player-green lg:inline-flex">
+            <PlayerIcon name="sports_cricket" className="text-lg" />
+            Train · Book · Compete
+            <PlayerIcon name="sports_tennis" className="text-lg" />
+          </span>
           <span className="truncate font-headline text-xs font-bold uppercase tracking-wider text-player-green lg:hidden">
             {title}
           </span>
@@ -176,8 +183,8 @@ export default function PlayerLayout() {
         <SidebarBody onNavigate={() => setMobileOpen(false)} />
       </aside>
 
-      <div className="min-h-screen lg:ml-[260px] lg:pt-0">
-        <main className="min-h-screen px-6 pb-12 pt-24 lg:px-6 lg:pt-24 player-scrollbar">
+      <div className="relative z-10 min-h-screen lg:ml-[260px] lg:pt-0">
+        <main className="relative z-10 min-h-screen px-6 pb-12 pt-24 lg:px-6 lg:pt-24 player-scrollbar">
           <Outlet />
         </main>
       </div>
