@@ -74,11 +74,25 @@ const createSubscriptionPaymentIntent = asyncHandler(async (req, res) => {
   } else if (action === 'renew') {
     const bp = await BusinessProfile.findOne({ user: userId });
     if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
+    if (!bp.hasActiveSubscription()) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active subscription to renew. Choose a plan first.',
+      });
+    }
     metaPkg = bp.subscriptionPackage;
     amountUsd = subscriptionPriceUsd(bp.subscriptionPackage);
   } else if (action === 'change') {
     if (!pkg || !['basic', 'pro', 'premium'].includes(pkg)) {
       return res.status(400).json({ success: false, message: 'package is required for change' });
+    }
+    const bp = await BusinessProfile.findOne({ user: userId });
+    if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
+    if (!bp.hasActiveSubscription()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subscribe to a plan before changing tiers.',
+      });
     }
     const count = await Product.countDocuments({ businessOwner: userId, isActive: true });
     const limit = BusinessProfile.packageLimit(pkg);
@@ -150,11 +164,12 @@ const subscribe = asyncHandler(async (req, res) => {
   });
   const renew = new Date();
   renew.setMonth(renew.getMonth() + 1);
+  const activeCount = await Product.countDocuments({ businessOwner: req.user.id, isActive: true });
   const bp = await BusinessProfile.findOneAndUpdate(
     { user: req.user.id },
     {
       subscriptionPackage: pkg,
-      listingSlotsRemaining: limit,
+      listingSlotsRemaining: Math.max(0, limit - activeCount),
       subscriptionRenewsAt: renew,
     },
     { new: true }
@@ -171,6 +186,12 @@ const renewSubscription = asyncHandler(async (req, res) => {
   const { paymentIntentId } = req.body;
   const bp = await BusinessProfile.findOne({ user: req.user.id });
   if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
+  if (!bp.hasActiveSubscription()) {
+    return res.status(400).json({
+      success: false,
+      message: 'No active subscription to renew. Choose a plan first.',
+    });
+  }
   const pkg = bp.subscriptionPackage;
   const amountUsd = subscriptionPriceUsd(pkg);
   const limit = BusinessProfile.packageLimit(bp.subscriptionPackage);
@@ -193,7 +214,8 @@ const renewSubscription = asyncHandler(async (req, res) => {
   });
   const renew = new Date();
   renew.setMonth(renew.getMonth() + 1);
-  bp.listingSlotsRemaining = limit;
+  const activeCount = await Product.countDocuments({ businessOwner: req.user.id, isActive: true });
+  bp.listingSlotsRemaining = Math.max(0, limit - activeCount);
   bp.subscriptionRenewsAt = renew;
   await bp.save();
   res.json({ success: true, data: { profile: bp, payment } });
@@ -218,6 +240,14 @@ const updateStore = asyncHandler(async (req, res) => {
 /** Change subscription tier with downgrade guard */
 const changeSubscription = asyncHandler(async (req, res) => {
   const { package: pkg, paymentIntentId } = req.body;
+  const bpExisting = await BusinessProfile.findOne({ user: req.user.id });
+  if (!bpExisting) return res.status(404).json({ success: false, message: 'Profile not found' });
+  if (!bpExisting.hasActiveSubscription()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Subscribe to a plan before changing tiers.',
+    });
+  }
   const amountUsd = subscriptionPriceUsd(pkg);
   const count = await Product.countDocuments({ businessOwner: req.user.id, isActive: true });
   const limit = BusinessProfile.packageLimit(pkg);
@@ -267,19 +297,18 @@ const changeSubscription = asyncHandler(async (req, res) => {
 const assertVerifiedAndQuota = async (userId) => {
   const u = await User.findById(userId);
   if (u.verificationStatus !== 'verified') {
-    const err = new Error('Verify your business first: upload documents and wait for admin approval before adding products.');
-    err.statusCode = 403;
-    throw err;
-  }
-  const docsCount = await VerificationDocument.countDocuments({ user: userId, roleContext: 'business_owner' });
-  if (docsCount < 1) {
-    const err = new Error('Upload business verification documents first before adding products.');
+    const err = new Error('Your business must be approved by admin before adding products.');
     err.statusCode = 403;
     throw err;
   }
   const bp = await BusinessProfile.findOne({ user: userId });
   if (bp.listingSlotsRemaining <= 0) {
-    const err = new Error('No listing slots available. Purchase or renew a subscription package first.');
+    const onFreeTrial = !bp.hasActiveSubscription();
+    const err = new Error(
+      onFreeTrial
+        ? 'Your 10 free listings are used up. Purchase Basic, Pro, or Premium to list more products.'
+        : 'No listing slots available. Purchase or renew a subscription package first.'
+    );
     err.statusCode = 403;
     throw err;
   }
@@ -340,7 +369,12 @@ const deleteProduct = asyncHandler(async (req, res) => {
   }
   await p.deleteOne();
   const bp = await BusinessProfile.findOne({ user: req.user.id });
-  bp.listingSlotsRemaining += 1;
+  if (bp.hasActiveSubscription()) {
+    bp.listingSlotsRemaining += 1;
+  } else {
+    const cap = bp.freeTrialListingsGranted ?? BusinessProfile.FREE_TRIAL_LISTINGS;
+    bp.listingSlotsRemaining = Math.min((bp.listingSlotsRemaining || 0) + 1, cap);
+  }
   await bp.save();
   res.json({ success: true, message: 'Deleted' });
 });

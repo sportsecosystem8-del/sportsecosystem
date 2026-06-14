@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, getErrorMessage } from '../../services/api';
 
 /** SRS — Basic 20 / Pro 40 / Premium 60 listings; monthly prices match backend subscription charges */
+const FREE_TRIAL_LISTINGS = 10;
 const SUBSCRIPTION_PLANS = [
   {
     tier: 'basic',
@@ -81,6 +82,9 @@ export default function BusinessDashboard() {
   };
 
   const storeName = p?.storeName || p?.businessName || 'Your Store';
+  const hasActiveSubscription = !!(p?.subscriptionPackage && p?.subscriptionRenewsAt);
+  const onFreeTrial = p && !hasActiveSubscription;
+  const freeTrialTotal = p?.freeTrialListingsGranted ?? FREE_TRIAL_LISTINGS;
 
   return (
     <div className="space-y-8">
@@ -186,39 +190,67 @@ export default function BusinessDashboard() {
             </div>
             <div className="business-glass group rounded-2xl p-6 transition hover:border-player-green/20 hover:shadow-[0_0_30px_rgba(0,255,135,0.1)]">
               <span className="material-symbols-outlined mb-2 text-2xl text-player-green/60 transition group-hover:text-player-green">inventory_2</span>
-              <p className="text-xs uppercase tracking-widest text-slate-400">Listing slots remaining</p>
-              <p className="business-stat-glow mt-2 font-orbitron text-2xl font-bold text-[#9bffce]">{p.listingSlotsRemaining ?? '—'}</p>
+              <p className="text-xs uppercase tracking-widest text-slate-400">
+                {onFreeTrial ? 'Free trial listings left' : 'Listing slots remaining'}
+              </p>
+              <p className="business-stat-glow mt-2 font-orbitron text-2xl font-bold text-[#9bffce]">
+                {p.listingSlotsRemaining ?? '—'}
+                {onFreeTrial ? (
+                  <span className="ml-1 text-sm font-normal text-slate-400">/ {freeTrialTotal}</span>
+                ) : null}
+              </p>
             </div>
             <div className="business-glass group rounded-2xl p-6 sm:col-span-2 lg:col-span-1">
-              <p className="text-xs uppercase tracking-widest text-slate-400">Renews</p>
+              <p className="text-xs uppercase tracking-widest text-slate-400">
+                {onFreeTrial ? 'Free trial' : 'Renews'}
+              </p>
               <p className="mt-2 font-orbitron text-lg font-bold text-slate-200">
-                {p.subscriptionRenewsAt
-                  ? new Date(p.subscriptionRenewsAt).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })
-                  : '—'}
+                {onFreeTrial ? (
+                  <span className="text-[#cc97ff]">One-time · {freeTrialTotal} listings</span>
+                ) : p.subscriptionRenewsAt ? (
+                  new Date(p.subscriptionRenewsAt).toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                ) : (
+                  '—'
+                )}
               </p>
             </div>
           </div>
+
+          {onFreeTrial && Number(p.listingSlotsRemaining || 0) === 0 ? (
+            <div className="rounded-2xl border border-[#cc97ff]/30 bg-[#cc97ff]/10 p-4 text-sm text-[#e8d4ff]">
+              Your free trial listings are used up. Choose Basic, Pro, or Premium below to continue selling.
+            </div>
+          ) : null}
 
           <section className="space-y-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="font-headline text-2xl font-bold uppercase tracking-tight text-white">Subscription</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Choose a plan that matches your catalog size. Prices are per month (USD).
+                  {onFreeTrial
+                    ? `New businesses get ${freeTrialTotal} free listings once. After that, pick a paid plan.`
+                    : 'Choose a plan that matches your catalog size. Prices are per month (USD).'}
                 </p>
               </div>
               <p className="text-xs uppercase tracking-widest text-[#cc97ff]/90">
-                Current: <span className="font-orbitron text-sm text-[#cc97ff]">{p.subscriptionPackage}</span>
+                {hasActiveSubscription ? (
+                  <>
+                    Current:{' '}
+                    <span className="font-orbitron text-sm text-[#cc97ff]">{p.subscriptionPackage}</span>
+                  </>
+                ) : (
+                  <span className="font-orbitron text-sm text-[#9bffce]">No paid plan yet</span>
+                )}
               </p>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
               {SUBSCRIPTION_PLANS.map((plan) => {
-                const isCurrent = p.subscriptionPackage === plan.tier;
+                const isCurrent = hasActiveSubscription && p.subscriptionPackage === plan.tier;
                 return (
                   <div
                     key={plan.tier}
@@ -269,7 +301,7 @@ export default function BusinessDashboard() {
                             : 'border border-[#cc97ff]/30 bg-[#1c253b] text-[#cc97ff] hover:bg-[#252f47]'
                       }`}
                     >
-                      {isCurrent ? 'Manage billing' : 'Choose ' + plan.title}
+                      {isCurrent ? 'Manage billing' : onFreeTrial ? 'Subscribe — ' + plan.title : 'Choose ' + plan.title}
                     </Link>
                   </div>
                 );

@@ -169,7 +169,8 @@ const register = asyncHandler(async (req, res) => {
       storeName: profile.storeName || profile.businessName,
       storeDescription: profile.storeDescription,
       locationMapUrl: profile.locationMapUrl,
-      listingSlotsRemaining: 0,
+      freeTrialListingsGranted: BusinessProfile.FREE_TRIAL_LISTINGS,
+      listingSlotsRemaining: BusinessProfile.FREE_TRIAL_LISTINGS,
     });
     user.businessProfile = bp._id;
     await user.save();

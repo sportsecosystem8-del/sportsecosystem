@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const PACKAGE_LIMITS = { basic: 20, pro: 40, premium: 60 };
+const FREE_TRIAL_LISTINGS = 10;
 
 const businessProfileSchema = new mongoose.Schema(
   {
@@ -12,8 +13,11 @@ const businessProfileSchema = new mongoose.Schema(
     storeName: String,
     storeDescription: String,
     locationMapUrl: { type: String, required: true, trim: true },
-    subscriptionPackage: { type: String, enum: ['basic', 'pro', 'premium'], default: 'basic' },
-    listingSlotsRemaining: { type: Number, default: 0 },
+    /** Set only after first paid subscription */
+    subscriptionPackage: { type: String, enum: [null, 'basic', 'pro', 'premium'], default: null },
+    /** One-time free listing pool for new businesses (not renewed monthly) */
+    freeTrialListingsGranted: { type: Number, default: FREE_TRIAL_LISTINGS },
+    listingSlotsRemaining: { type: Number, default: FREE_TRIAL_LISTINGS },
     subscriptionRenewsAt: Date,
     legalDocumentNote: String,
     /** Storefront branding & policies */
@@ -29,5 +33,10 @@ businessProfileSchema.statics.packageLimit = function (pkg) {
   return PACKAGE_LIMITS[pkg] ?? PACKAGE_LIMITS.basic;
 };
 
+businessProfileSchema.methods.hasActiveSubscription = function hasActiveSubscription() {
+  return !!(this.subscriptionPackage && this.subscriptionRenewsAt);
+};
+
 module.exports = mongoose.model('BusinessProfile', businessProfileSchema);
 module.exports.PACKAGE_LIMITS = PACKAGE_LIMITS;
+module.exports.FREE_TRIAL_LISTINGS = FREE_TRIAL_LISTINGS;

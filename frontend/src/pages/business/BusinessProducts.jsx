@@ -12,13 +12,16 @@ const formSectionTitlePurple =
 const formSectionTitleGreen =
   'font-rajdhani text-sm font-bold uppercase tracking-[0.14em] text-[#9bffce]';
 
+const FREE_TRIAL_LISTINGS = 10;
+
 export default function BusinessProducts() {
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
   const [gateLoading, setGateLoading] = useState(true);
   const [verificationStatus, setVerificationStatus] = useState('');
   const [listingSlotsRemaining, setListingSlotsRemaining] = useState(0);
-  const [documentsCount, setDocumentsCount] = useState(0);
+  const [freeTrialListingsGranted, setFreeTrialListingsGranted] = useState(FREE_TRIAL_LISTINGS);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('10');
@@ -32,23 +35,23 @@ export default function BusinessProducts() {
   const [lowStockThreshold, setLowStockThreshold] = useState('5');
   const [imageFile, setImageFile] = useState(null);
   const isVerified = verificationStatus === 'verified';
-  const hasDocuments = documentsCount > 0;
   const hasListingSlots = Number(listingSlotsRemaining || 0) > 0;
-  const canAddProducts = isVerified && hasDocuments && hasListingSlots;
+  const onFreeTrial = isVerified && !hasActiveSubscription;
+  const canAddProducts = isVerified && hasListingSlots;
   const needsVerification = !isVerified;
-  const needsDocuments = isVerified && !hasDocuments;
-  const needsSubscription = isVerified && hasDocuments && !hasListingSlots;
+  const needsSubscription = isVerified && !hasListingSlots;
 
   const loadMine = () => api.get('/business/products').then((r) => setItems(r.data.data || []));
   const loadGate = async () => {
-    const [meRes, profileRes, docsRes] = await Promise.all([
+    const [meRes, profileRes] = await Promise.all([
       api.get('/auth/me'),
       api.get('/business/me/profile'),
-      api.get('/business/documents'),
     ]);
     setVerificationStatus(meRes.data?.data?.verificationStatus || '');
-    setListingSlotsRemaining(profileRes.data?.data?.listingSlotsRemaining || 0);
-    setDocumentsCount((docsRes.data?.data || []).length);
+    const profile = profileRes.data?.data || {};
+    setListingSlotsRemaining(profile.listingSlotsRemaining || 0);
+    setFreeTrialListingsGranted(profile.freeTrialListingsGranted ?? FREE_TRIAL_LISTINGS);
+    setHasActiveSubscription(!!(profile.subscriptionPackage && profile.subscriptionRenewsAt));
   };
 
   useEffect(() => {
@@ -78,12 +81,12 @@ export default function BusinessProducts() {
       setErr('Your business must be approved by admin before you can add products.');
       return;
     }
-    if (needsDocuments) {
-      setErr('Upload at least one verification document before adding products.');
-      return;
-    }
     if (needsSubscription) {
-      setErr('Purchase or renew a subscription to get listing slots before adding products.');
+      setErr(
+        onFreeTrial || !hasActiveSubscription
+          ? 'Your free trial listings are used up. Purchase Basic, Pro, or Premium to list more products.'
+          : 'Purchase or renew a subscription to get listing slots before adding products.'
+      );
       return;
     }
     if (!imageFile) {
@@ -126,7 +129,7 @@ export default function BusinessProducts() {
     if (!confirm('Delete product?')) return;
     try {
       await api.delete(`/business/products/${id}`);
-      loadMine();
+      await Promise.all([loadMine(), loadGate()]);
     } catch (er) {
       alert(getErrorMessage(er));
     }
@@ -145,41 +148,29 @@ export default function BusinessProducts() {
         <div className="max-w-2xl rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm">
           <p className="font-semibold text-amber-200">Verification required before adding products.</p>
           <p className="mt-2 text-amber-100/90">
-            Upload your business documents and wait for admin approval. You can add products only after your account is verified.
+            Wait for admin approval before listing products. You can optionally upload verification documents for security review.
           </p>
           <ul className="mt-3 space-y-1 text-xs text-amber-100/80">
             <li>Verification status: {verificationStatus || 'pending'}</li>
-            <li>Documents uploaded: {documentsCount}</li>
           </ul>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               to="/business/documents"
               className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-white/20"
             >
-              Upload documents
-            </Link>
-          </div>
-        </div>
-      ) : needsDocuments ? (
-        <div className="max-w-2xl rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm">
-          <p className="font-semibold text-amber-200">Upload verification documents</p>
-          <p className="mt-2 text-amber-100/90">
-            Your business is approved. Upload at least one verification document to continue.
-          </p>
-          <div className="mt-4">
-            <Link
-              to="/business/documents"
-              className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-white/20"
-            >
-              Upload documents
+              Documents (optional)
             </Link>
           </div>
         </div>
       ) : needsSubscription ? (
         <div className="max-w-2xl rounded-xl border border-[#cc97ff]/30 bg-[#cc97ff]/10 p-4 text-sm">
-          <p className="font-semibold text-[#e8d4ff]">Subscription required to list products</p>
+          <p className="font-semibold text-[#e8d4ff]">
+            {onFreeTrial || !hasActiveSubscription ? 'Free trial listings used up' : 'Subscription required to list products'}
+          </p>
           <p className="mt-2 text-[#e8d4ff]/90">
-            Your business is verified. Purchase or renew a subscription package to get listing slots, then you can add products.
+            {onFreeTrial || !hasActiveSubscription
+              ? `You have used all ${freeTrialListingsGranted} free listings. Choose Basic, Pro, or Premium to continue.`
+              : 'Purchase or renew a subscription package to get listing slots, then you can add products.'}
           </p>
           <ul className="mt-3 space-y-1 text-xs text-[#e8d4ff]/80">
             <li>Listing slots remaining: {listingSlotsRemaining}</li>
@@ -200,8 +191,19 @@ export default function BusinessProducts() {
           <div className="rounded-2xl border border-white/10 bg-[#11192c] p-6 shadow-lg shadow-black/20">
             <h2 className="font-rajdhani text-lg font-bold uppercase tracking-wide text-white">Add new product</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Listing slots remaining:{' '}
-              <span className="font-orbitron text-[#cc97ff]">{listingSlotsRemaining}</span>
+              {onFreeTrial ? (
+                <>
+                  Free trial listings left:{' '}
+                  <span className="font-orbitron text-[#9bffce]">
+                    {listingSlotsRemaining} / {freeTrialListingsGranted}
+                  </span>
+                </>
+              ) : (
+                <>
+                  Listing slots remaining:{' '}
+                  <span className="font-orbitron text-[#cc97ff]">{listingSlotsRemaining}</span>
+                </>
+              )}
             </p>
           </div>
 

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import StripePaySection, { stripePublishableConfigured } from '../../components/payment/StripePaySection';
+
+const FREE_TRIAL_LISTINGS = 10;
 
 /** Subscribe, renew, change tier (Stripe or mock) */
 export default function BusinessSubscription() {
@@ -10,8 +12,25 @@ export default function BusinessSubscription() {
   const [clientSecret, setClientSecret] = useState('');
   const [pending, setPending] = useState(null);
   const [intentLoading, setIntentLoading] = useState(false);
+  const [profile, setProfile] = useState(null);
 
   const useStripeFlow = stripePublishableConfigured();
+  const hasActiveSubscription = !!(profile?.subscriptionPackage && profile?.subscriptionRenewsAt);
+  const onFreeTrial = profile && !hasActiveSubscription;
+  const freeTrialTotal = profile?.freeTrialListingsGranted ?? FREE_TRIAL_LISTINGS;
+
+  useEffect(() => {
+    api
+      .get('/business/me/profile')
+      .then((r) => setProfile(r.data?.data || null))
+      .catch((e) => setErr(getErrorMessage(e)));
+  }, []);
+
+  const refreshProfile = () =>
+    api
+      .get('/business/me/profile')
+      .then((r) => setProfile(r.data?.data || null))
+      .catch(() => {});
 
   const startIntent = async (kind, pkg) => {
     setMsg('');
@@ -51,6 +70,7 @@ export default function BusinessSubscription() {
       }
       setClientSecret('');
       setPending(null);
+      await refreshProfile();
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -62,6 +82,7 @@ export default function BusinessSubscription() {
     try {
       await api.post('/business/subscription', { package: pkg, cardLast4 });
       setMsg(`Subscribed to ${pkg} (mock payment).`);
+      await refreshProfile();
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -71,6 +92,7 @@ export default function BusinessSubscription() {
     try {
       await api.post('/business/subscription/renew');
       setMsg('Renewed (mock).');
+      await refreshProfile();
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -82,6 +104,7 @@ export default function BusinessSubscription() {
     try {
       await api.put('/business/subscription/plan', { package: pkg, cardLast4 });
       setMsg(`Plan changed to ${pkg} (mock).`);
+      await refreshProfile();
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -90,14 +113,38 @@ export default function BusinessSubscription() {
   return (
     <div className="max-w-4xl">
       <h1 className="font-rajdhani text-5xl font-bold uppercase tracking-tight text-white">Subscription Management</h1>
-      <p className="mt-1 text-sm text-slate-400">Basic 20 / Pro 40 / Premium 60 listings per cycle (SRS).</p>
+      <p className="mt-1 text-sm text-slate-400">
+        New businesses get {freeTrialTotal} free listings once. Paid plans: Basic 20 / Pro 40 / Premium 60 per cycle.
+      </p>
+
+      {onFreeTrial ? (
+        <div className="mt-4 rounded-xl border border-[#9bffce]/30 bg-[#9bffce]/10 p-4 text-sm text-[#d7ffe8]">
+          <p className="font-semibold">Free trial active</p>
+          <p className="mt-1 text-[#d7ffe8]/90">
+            {profile.listingSlotsRemaining ?? 0} of {freeTrialTotal} free listing slots remaining. After they are used,
+            choose a paid plan below.
+          </p>
+        </div>
+      ) : hasActiveSubscription ? (
+        <div className="mt-4 rounded-xl border border-[#cc97ff]/30 bg-[#cc97ff]/10 p-4 text-sm text-[#e8d4ff]">
+          Current plan: <span className="font-orbitron uppercase text-white">{profile.subscriptionPackage}</span>
+          {profile.subscriptionRenewsAt ? (
+            <span className="ml-2 text-[#e8d4ff]/80">
+              · Renews {new Date(profile.subscriptionRenewsAt).toLocaleDateString()}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       {err ? <p className="mt-4 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{err}</p> : null}
       {msg ? <p className="mt-4 rounded-lg bg-[#1c253b] px-3 py-2 text-sm text-[#cc97ff]">{msg}</p> : null}
 
       {useStripeFlow ? (
         <div className="mt-6 space-y-4 rounded-xl border border-white/10 bg-[#0b1324] p-4">
           <p className="text-sm text-slate-400">
-            Payments use Stripe (test mode). Choose a plan, then complete the card form when it appears.
+            {hasActiveSubscription
+              ? 'Payments use Stripe (test mode). Renew or change plan below.'
+              : 'Payments use Stripe (test mode). Choose a plan to subscribe after your free trial.'}
           </p>
           {!clientSecret ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -125,14 +172,16 @@ export default function BusinessSubscription() {
               >
                 Premium — pay
               </button>
-              <button
-                type="button"
-                disabled={intentLoading}
-                className="rounded-xl bg-gradient-to-r from-[#cc97ff] to-[#9c48ea] px-4 py-3 text-sm font-bold uppercase text-[#360061]"
-                onClick={() => startIntent('renew')}
-              >
-                Renew current — pay
-              </button>
+              {hasActiveSubscription ? (
+                <button
+                  type="button"
+                  disabled={intentLoading}
+                  className="rounded-xl bg-gradient-to-r from-[#cc97ff] to-[#9c48ea] px-4 py-3 text-sm font-bold uppercase text-[#360061]"
+                  onClick={() => startIntent('renew')}
+                >
+                  Renew current — pay
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="mt-4 max-w-md">
@@ -145,20 +194,24 @@ export default function BusinessSubscription() {
               />
             </div>
           )}
-          <p className="mt-6 text-xs uppercase tracking-widest text-slate-500">Change plan</p>
-          <div className="flex flex-wrap gap-2">
-            {['basic', 'pro', 'premium'].map((pkg) => (
-              <button
-                key={pkg}
-                type="button"
-                disabled={intentLoading || !!clientSecret}
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase text-white hover:bg-white/5"
-                onClick={() => startIntent('change', pkg)}
-              >
-                Switch to {pkg} (pay)
-              </button>
-            ))}
-          </div>
+          {hasActiveSubscription ? (
+            <>
+              <p className="mt-6 text-xs uppercase tracking-widest text-slate-500">Change plan</p>
+              <div className="flex flex-wrap gap-2">
+                {['basic', 'pro', 'premium'].map((pkg) => (
+                  <button
+                    key={pkg}
+                    type="button"
+                    disabled={intentLoading || !!clientSecret}
+                    className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase text-white hover:bg-white/5"
+                    onClick={() => startIntent('change', pkg)}
+                  >
+                    Switch to {pkg} (pay)
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : (
         <>
@@ -193,27 +246,33 @@ export default function BusinessSubscription() {
             >
               Premium
             </button>
-            <button
-              type="button"
-              className="rounded-xl bg-gradient-to-r from-[#cc97ff] to-[#9c48ea] px-4 py-4 text-sm font-bold uppercase tracking-wider text-[#360061]"
-              onClick={renewMock}
-            >
-              Renew current
-            </button>
-          </div>
-          <p className="mt-8 text-xs uppercase tracking-widest text-slate-500">Change plan (upgrade/downgrade guard)</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {['basic', 'pro', 'premium'].map((pkg) => (
+            {hasActiveSubscription ? (
               <button
-                key={pkg}
                 type="button"
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase text-white hover:bg-white/5"
-                onClick={() => changeMock(pkg)}
+                className="rounded-xl bg-gradient-to-r from-[#cc97ff] to-[#9c48ea] px-4 py-4 text-sm font-bold uppercase tracking-wider text-[#360061]"
+                onClick={renewMock}
               >
-                Switch to {pkg}
+                Renew current
               </button>
-            ))}
+            ) : null}
           </div>
+          {hasActiveSubscription ? (
+            <>
+              <p className="mt-8 text-xs uppercase tracking-widest text-slate-500">Change plan (upgrade/downgrade guard)</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {['basic', 'pro', 'premium'].map((pkg) => (
+                  <button
+                    key={pkg}
+                    type="button"
+                    className="rounded-lg border border-white/10 px-4 py-2 text-sm uppercase text-white hover:bg-white/5"
+                    onClick={() => changeMock(pkg)}
+                  >
+                    Switch to {pkg}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </>
       )}
     </div>
