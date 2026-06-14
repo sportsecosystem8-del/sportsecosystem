@@ -68,15 +68,105 @@ async function extendCoachPlatformPeriod(userId) {
 /** Avoid overlapping coach sessions */
 const SESSION_GAP_MS = 90 * 60 * 1000;
 
-async function sessionConflicts(coachId, scheduledAt) {
+async function sessionConflicts(coachId, scheduledAt, excludeSessionId = null) {
   const t = new Date(scheduledAt).getTime();
-  const sessions = await TrainingSession.find({
+  const query = {
     coach: coachId,
     status: { $in: ['scheduled'] },
-  })
-    .select('scheduledAt')
-    .lean();
+  };
+  if (excludeSessionId) query._id = { $ne: excludeSessionId };
+  const sessions = await TrainingSession.find(query).select('scheduledAt').lean();
   return sessions.some((s) => Math.abs(new Date(s.scheduledAt).getTime() - t) < SESSION_GAP_MS);
+}
+
+function toMinutesOfDay(timeText) {
+  if (!timeText || typeof timeText !== 'string' || !timeText.includes(':')) return null;
+  const [h, m] = timeText.split(':').map((n) => Number.parseInt(n, 10));
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+const SESSION_DURATION_MINUTES = 60;
+
+function fitsCoachAvailability(scheduledAt, availability) {
+  if (!Array.isArray(availability) || availability.length === 0) return { ok: true };
+  const at = new Date(scheduledAt);
+  if (Number.isNaN(at.getTime())) return { ok: false, message: 'Invalid schedule time.' };
+  const day = at.getDay();
+  const slotStart = at.getHours() * 60 + at.getMinutes();
+  const slotEnd = slotStart + SESSION_DURATION_MINUTES;
+  const found = availability.some((a) => {
+    if (a?.dayOfWeek !== day) return false;
+    const start = toMinutesOfDay(a.start);
+    const end = toMinutesOfDay(a.end);
+    if (start == null || end == null) return false;
+    return start <= slotStart && end >= slotEnd;
+  });
+  return found
+    ? { ok: true }
+    : { ok: false, message: 'Selected time is outside your published availability.' };
+}
+
+async function assertAcceptedStudent(coachId, playerId) {
+  const accepted = await TrainingRequest.findOne({
+    coach: coachId,
+    player: playerId,
+    status: 'accepted',
+  }).lean();
+  if (!accepted) {
+    const err = new Error('This player is not an accepted student yet.');
+    err.statusCode = 403;
+    throw err;
+  }
+  return accepted;
+}
+
+async function scheduleTrainingSession({ coachId, playerId, scheduledAt, trainingRequestId, location }) {
+  const when = new Date(scheduledAt);
+  if (Number.isNaN(when.getTime())) {
+    const err = new Error('Invalid schedule time.');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (when.getTime() < Date.now() - 60_000) {
+    const err = new Error('Schedule time must be in the future.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const accepted = await assertAcceptedStudent(coachId, playerId);
+
+  if (await sessionConflicts(coachId, when)) {
+    const err = new Error('Another session is within 90 minutes of this time.');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const cp = await CoachProfile.findOne({ user: coachId }).lean();
+  const availabilityCheck = fitsCoachAvailability(when, cp?.availability);
+  if (!availabilityCheck.ok) {
+    const err = new Error(availabilityCheck.message);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const active = await TrainingSession.countDocuments({ coach: coachId, status: 'scheduled' });
+  const cap = cp?.maxStudents ?? 40;
+  if (active >= cap) {
+    const err = new Error(`Maximum scheduled sessions (${cap}) reached.`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  return TrainingSession.create({
+    coach: coachId,
+    player: playerId,
+    trainingRequest: trainingRequestId || accepted._id,
+    scheduledAt: when,
+    location: location ? String(location).trim() : undefined,
+    status: 'scheduled',
+  });
 }
 
 function mondayOfDate(d) {
@@ -216,7 +306,10 @@ async function publishPlanToPlayer(plan) {
 const populatePlayerBrief = {
   path: 'player',
   select: 'email',
-  populate: { path: 'playerProfile', select: 'fullName city sportPreference skillLevel' },
+  populate: {
+    path: 'playerProfile',
+    select: 'fullName phone city address sportPreference skillLevel',
+  },
 };
 
 const getProfile = asyncHandler(async (req, res) => {
@@ -362,6 +455,13 @@ const updateProfile = asyncHandler(async (req, res) => {
   const allowed = ['fullName', 'phone', 'bio', 'city', 'academyLocation', 'yearsExperience', 'maxStudents'];
   const patch = {};
   for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+  if (req.body.locationMapUrl !== undefined) {
+    const mapLink = String(req.body.locationMapUrl || '').trim();
+    if (!mapLink || !/^https?:\/\//i.test(mapLink)) {
+      return res.status(400).json({ success: false, message: 'Valid Google Maps URL required.' });
+    }
+    patch.locationMapUrl = mapLink;
+  }
   const profile = await CoachProfile.findOneAndUpdate({ user: req.user.id }, patch, { new: true });
   if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
   res.json({ success: true, data: profile });
@@ -399,7 +499,36 @@ const listTrainingRequests = asyncHandler(async (req, res) => {
     .populate(populatePlayerBrief)
     .sort({ createdAt: -1 })
     .lean();
-  res.json({ success: true, data: list });
+
+  const playerIds = [...new Set(list.map((row) => String(row.player?._id || row.player)).filter(Boolean))];
+  let latestByPlayer = new Map();
+  if (playerIds.length) {
+    const perfRows = await PerformanceEvaluation.find({ player: { $in: playerIds } })
+      .sort({ weekStartDate: -1 })
+      .lean();
+    for (const row of perfRows) {
+      const key = String(row.player);
+      if (!latestByPlayer.has(key)) latestByPlayer.set(key, row);
+    }
+  }
+
+  const data = list.map((row) => {
+    const playerId = String(row.player?._id || row.player || '');
+    const latest = latestByPlayer.get(playerId);
+    return {
+      ...row,
+      latestPerformance: latest
+        ? {
+            technique: latest.technique,
+            fitness: latest.fitness,
+            attitude: latest.attitude,
+            weekStartDate: latest.weekStartDate,
+          }
+        : null,
+    };
+  });
+
+  res.json({ success: true, data });
 });
 
 const updateTrainingRequest = asyncHandler(async (req, res) => {
@@ -418,22 +547,18 @@ const updateTrainingRequest = asyncHandler(async (req, res) => {
     if (scheduledAt) {
       const when = new Date(scheduledAt);
       draftDate = when;
-      if (await sessionConflicts(req.user.id, when)) {
-        schedulingNote = 'Request approved. Session was not scheduled due to a 90-minute conflict.';
-      } else {
-        const cp = await CoachProfile.findOne({ user: req.user.id });
-        const active = await TrainingSession.countDocuments({ coach: req.user.id, status: 'scheduled' });
-        const cap = cp?.maxStudents ?? 40;
-        if (active >= cap) {
-          schedulingNote = `Request approved. Session was not scheduled because maximum concurrent students (${cap}) was reached.`;
+      try {
+        session = await scheduleTrainingSession({
+          coachId: req.user.id,
+          playerId: tr.player,
+          scheduledAt: when,
+          trainingRequestId: tr._id,
+        });
+      } catch (e) {
+        if (e.statusCode === 409) {
+          schedulingNote = `Request approved. Session was not scheduled: ${e.message}`;
         } else {
-          session = await TrainingSession.create({
-            coach: req.user.id,
-            player: tr.player,
-            trainingRequest: tr._id,
-            scheduledAt: when,
-            status: 'scheduled',
-          });
+          throw e;
         }
       }
     } else if (!session) {
@@ -469,7 +594,45 @@ const listTrainingSessions = asyncHandler(async (req, res) => {
     .populate(populatePlayerBrief)
     .sort({ scheduledAt: 1 })
     .lean();
-  res.json({ success: true, data: list });
+  const sessionIds = list.map((s) => s._id);
+  let attendanceBySession = new Map();
+  if (sessionIds.length) {
+    const rows = await AttendanceRecord.find({ session: { $in: sessionIds } })
+      .select('session present notes updatedAt')
+      .lean();
+    attendanceBySession = new Map(rows.map((row) => [String(row.session), row]));
+  }
+  res.json({
+    success: true,
+    data: list.map((s) => ({
+      ...s,
+      attendance: attendanceBySession.get(String(s._id)) || null,
+    })),
+  });
+});
+
+const createTrainingSession = asyncHandler(async (req, res) => {
+  const { playerId, scheduledAt, location } = req.body;
+  if (!playerId || !scheduledAt) {
+    return res.status(400).json({ success: false, message: 'playerId and scheduledAt are required.' });
+  }
+  const session = await scheduleTrainingSession({
+    coachId: req.user.id,
+    playerId,
+    scheduledAt,
+    location,
+  });
+  try {
+    await notifyUser(playerId, {
+      title: 'Training session scheduled',
+      body: `Your coach scheduled a session for ${new Date(session.scheduledAt).toLocaleString()}.`,
+      category: 'training',
+    });
+  } catch (e) {
+    console.warn('[notify][session-scheduled] failed:', e.message);
+  }
+  const populated = await TrainingSession.findById(session._id).populate(populatePlayerBrief).lean();
+  res.status(201).json({ success: true, data: populated });
 });
 
 const generateAutoTrainingPlan = asyncHandler(async (req, res) => {
@@ -588,7 +751,15 @@ const markAttendance = asyncHandler(async (req, res) => {
     { session: session._id, coach: req.user.id, player: session.player, present, notes },
     { upsert: true, new: true }
   );
-  res.json({ success: true, data: rec });
+  session.status = 'completed';
+  await session.save();
+  res.json({
+    success: true,
+    data: {
+      attendance: rec,
+      session: { _id: session._id, status: session.status },
+    },
+  });
 });
 
 const addPerformance = asyncHandler(async (req, res) => {
@@ -1038,6 +1209,7 @@ module.exports = {
   listTrainingRequests,
   updateTrainingRequest,
   listTrainingSessions,
+  createTrainingSession,
   generateAutoTrainingPlan,
   createTrainingPlan,
   listTrainingPlans,

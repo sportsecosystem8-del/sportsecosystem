@@ -5,8 +5,9 @@ import { playerBtnOutlineSm, playerBtnSm, playerField, playerLabel } from '../..
 import DocumentPreviewModal from '../../components/DocumentPreviewModal';
 import { useVerificationDocumentPreview } from '../../hooks/useVerificationDocumentPreview';
 import { previewVerificationDocumentError } from '../../utils/verificationDocument';
-import StripePaySection, { stripePublishableConfigured } from '../../components/payment/StripePaySection';
 import CoachAvatar from '../../components/CoachAvatar';
+import CoachLocationLines from '../../components/player/CoachLocationLines';
+import { playerLocationOrigin } from '../../utils/coachLocation';
 import { api, getErrorMessage } from '../../services/api';
 
 export default function PlayerCoaches() {
@@ -17,15 +18,10 @@ export default function PlayerCoaches() {
   const [requestNote, setRequestNote] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [err, setErr] = useState('');
-  const [payAmt, setPayAmt] = useState({});
-  const [payCard, setPayCard] = useState('4242');
-  const [stripeCheckout, setStripeCheckout] = useState(null);
-  const [intentLoading, setIntentLoading] = useState(false);
   const [certPicker, setCertPicker] = useState(null);
   const [certLoadingId, setCertLoadingId] = useState(null);
+  const [playerOrigin, setPlayerOrigin] = useState('');
   const docPreview = useVerificationDocumentPreview();
-
-  const useStripeFlow = stripePublishableConfigured();
 
   const openCertificate = async (coachId, doc) => {
     setErr('');
@@ -101,13 +97,15 @@ export default function PlayerCoaches() {
 
   const load = async () => {
     try {
-      const [rec, tr] = await Promise.all([
+      const [rec, tr, profileRes] = await Promise.all([
         api.get('/players/recommendations', { params: { limit: 5 } }),
         api.get('/players/training-requests'),
+        api.get('/players/me/profile').catch(() => ({ data: { data: null } })),
       ]);
       setList(rec.data.data || []);
       setGenerationMethod(rec.data.generationMethod || 'rules');
       setTrainingRequests(tr.data.data || []);
+      setPlayerOrigin(playerLocationOrigin(profileRes.data?.data));
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -116,65 +114,6 @@ export default function PlayerCoaches() {
   useEffect(() => {
     load();
   }, []);
-
-  const startStripePay = async (coachId) => {
-    const amount = parseFloat(payAmt[coachId] || '0', 10);
-    if (!amount || amount <= 0) {
-      setErr('Enter amount');
-      return;
-    }
-    setErr('');
-    setIntentLoading(true);
-    setStripeCheckout(null);
-    try {
-      const { data } = await api.post('/players/payments/coach/payment-intent', { coachId, amount });
-      setStripeCheckout({
-        clientSecret: data.data.clientSecret,
-        coachId,
-        amount,
-      });
-    } catch (e) {
-      setErr(getErrorMessage(e));
-    } finally {
-      setIntentLoading(false);
-    }
-  };
-
-  const confirmCoachPayment = async (paymentIntentId) => {
-    if (!stripeCheckout) return;
-    const { coachId, amount } = stripeCheckout;
-    setErr('');
-    try {
-      await api.post('/players/payments/coach', {
-        coachId,
-        amount,
-        paymentIntentId,
-      });
-      setStripeCheckout(null);
-      setStatusMsg('Payment completed.');
-    } catch (e) {
-      setErr(getErrorMessage(e));
-    }
-  };
-
-  const payCoachMock = async (coachId) => {
-    const amount = parseFloat(payAmt[coachId] || '0', 10);
-    if (!amount || amount <= 0) {
-      setErr('Enter amount');
-      return;
-    }
-    setErr('');
-    try {
-      await api.post('/players/payments/coach', {
-        coachId,
-        amount,
-        cardLast4: payCard.replace(/\D/g, '').slice(0, 4) || 'mock',
-      });
-      setStatusMsg('Payment recorded (mock gateway).');
-    } catch (e) {
-      setErr(getErrorMessage(e));
-    }
-  };
 
   const requestTraining = async (id) => {
     const action = coachRequestAction(id);
@@ -229,9 +168,8 @@ export default function PlayerCoaches() {
                 </span>
                 <p className="text-lg font-bold text-white">{row.profile?.fullName}</p>
               </div>
-              <p className="mt-1 text-sm text-player-on-variant">
-                {row.profile?.specialties?.join(', ')} · {row.profile?.city || '—'}
-              </p>
+              <p className="mt-1 text-sm text-player-on-variant">{row.profile?.specialties?.join(', ') || '—'}</p>
+              <CoachLocationLines profile={row.profile} playerOrigin={playerOrigin} className="mt-2" />
               <p className="mt-2 text-xs text-player-on-variant/70">
                 Match score: {row.matchScore?.toFixed?.(1) ?? row.matchScore}
               </p>
@@ -249,7 +187,7 @@ export default function PlayerCoaches() {
               ) : null}
               {Array.isArray(row.reasons) && row.reasons.length ? (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-player-on-variant/70">
-                  {row.reasons.slice(0, 3).map((reason) => (
+                  {row.reasons.map((reason) => (
                     <li key={reason}>{reason}</li>
                   ))}
                 </ul>
@@ -283,51 +221,6 @@ export default function PlayerCoaches() {
               >
                 {certLoadingId === row.userId ? 'Loading…' : 'View certificate'}
               </button>
-              <p className="text-[10px] uppercase tracking-wider text-slate-500">Pay fee</p>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="Amount"
-                className={`${playerField} text-xs`}
-                value={payAmt[row.userId] ?? ''}
-                onChange={(e) => setPayAmt((p) => ({ ...p, [row.userId]: e.target.value }))}
-              />
-              {useStripeFlow ? (
-                <>
-                  {stripeCheckout?.coachId === row.userId ? (
-                    <StripePaySection
-                      clientSecret={stripeCheckout.clientSecret}
-                      onSucceeded={confirmCoachPayment}
-                      onError={(m) => setErr(m)}
-                      submitLabel="Pay coach"
-                      buttonClassName={playerBtnSm}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={intentLoading}
-                      onClick={() => startStripePay(row.userId)}
-                      className={playerBtnSm}
-                    >
-                      {intentLoading ? '…' : 'Pay with card (Stripe)'}
-                    </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <input
-                    className={`${playerField} text-xs`}
-                    placeholder="Card last 4"
-                    maxLength={4}
-                    value={payCard}
-                    onChange={(e) => setPayCard(e.target.value)}
-                  />
-                  <button type="button" onClick={() => payCoachMock(row.userId)} className={playerBtnSm}>
-                    Pay coach (mock)
-                  </button>
-                </>
-              )}
             </div>
           </PlayerCard>
         ))}

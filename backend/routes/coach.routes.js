@@ -42,6 +42,16 @@ r.patch(
 );
 r.get('/training-sessions', c.listTrainingSessions);
 r.post(
+  '/training-sessions',
+  [
+    body('playerId').isMongoId().withMessage('Valid player id required'),
+    body('scheduledAt').isISO8601().withMessage('Valid schedule time required'),
+    body('location').optional().trim(),
+  ],
+  validateRequest,
+  c.createTrainingSession
+);
+r.post(
   '/training-plans/auto-draft',
   [
     body('playerId').isMongoId().withMessage('Valid player id required'),

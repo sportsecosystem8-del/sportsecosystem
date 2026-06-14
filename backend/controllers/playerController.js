@@ -42,7 +42,10 @@ const { generateCoachRecommendations } = require('../services/aiCoachEngine');
 const populateCoachBrief = {
   path: 'coach',
   select: 'email verificationStatus',
-  populate: { path: 'coachProfile', select: 'fullName city specialties profilePhotoUrl averageRating' },
+  populate: {
+    path: 'coachProfile',
+    select: 'fullName city specialties profilePhotoUrl averageRating academyLocation locationMapUrl',
+  },
 };
 const populatePlayerBrief = {
   path: 'player',
@@ -121,13 +124,33 @@ function scoreTimeOverlap(playerSlots, coachAvailability) {
   return { score: clamp01(ratio), detail: overlaps ? `${overlaps} preferred slot(s) overlap.` : 'No strong slot overlap yet.' };
 }
 
-function scoreLocation(playerCity, coachCity) {
+function scoreLocation(playerCity, coachProfile) {
+  const coachCity = coachProfile?.city;
+  const academy = String(coachProfile?.academyLocation || '').trim();
   const p = String(playerCity || '').trim().toLowerCase();
   const c = String(coachCity || '').trim().toLowerCase();
-  if (!p || !c) return { score: 0.45, detail: 'Location partially available.' };
-  if (p === c) return { score: 1, detail: 'Same city match.' };
-  if (p.includes(c) || c.includes(p)) return { score: 0.75, detail: 'Near city match.' };
-  return { score: 0.25, detail: 'Different city.' };
+  if (!p || !c) {
+    return {
+      score: 0.45,
+      detail: academy ? `Academy: ${academy}.` : 'Location partially available.',
+    };
+  }
+  if (p === c) {
+    return {
+      score: 1,
+      detail: academy ? `Same city — ${academy}.` : `Same city — ${coachCity}.`,
+    };
+  }
+  if (p.includes(c) || c.includes(p)) {
+    return {
+      score: 0.75,
+      detail: academy ? `Near city — ${academy}.` : 'Near city match.',
+    };
+  }
+  return {
+    score: 0.25,
+    detail: academy ? `Different city — academy in ${coachCity}: ${academy}.` : `Different city — ${coachCity}.`,
+  };
 }
 
 function levelToIndex(level) {
@@ -183,6 +206,15 @@ function scorePerformanceFit(playerSignal, profile) {
   };
 }
 
+function buildMatchReasons(breakdown, details) {
+  return [
+    `Skill fit: ${breakdown.skill}% (${details.skill})`,
+    `Schedule fit: ${breakdown.time}% (${details.time})`,
+    `Location fit: ${breakdown.location}% (${details.location})`,
+    `Performance fit: ${breakdown.performance}% (${details.performance})`,
+  ];
+}
+
 function aiRecommendationsEnabled() {
   return String(process.env.AI_RECOMMENDATIONS_ENABLED || 'true') !== 'false';
 }
@@ -231,7 +263,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
     .map((c) => {
       const skill = scoreSkill(c.coachProfile, p.sportPreference, playerSignal.level);
       const time = scoreTimeOverlap(playerTimeSlots, c.coachProfile.availability);
-      const location = scoreLocation(p.city, c.coachProfile.city);
+      const location = scoreLocation(p.city, c.coachProfile);
       const performance = scorePerformanceFit(playerSignal, c.coachProfile);
 
       const finalScore =
@@ -241,17 +273,25 @@ const getRecommendations = asyncHandler(async (req, res) => {
           RECOMMENDATION_WEIGHTS.location * location.score +
           RECOMMENDATION_WEIGHTS.performance * performance.score);
 
+      const breakdown = {
+        skill: Math.round(skill.score * 100),
+        time: Math.round(time.score * 100),
+        location: Math.round(location.score * 100),
+        performance: Math.round(performance.score * 100),
+      };
+      const factorDetails = {
+        skill: skill.detail,
+        time: time.detail,
+        location: location.detail,
+        performance: performance.detail,
+      };
+
       return {
         coachUser: c,
         profile: c.coachProfile,
         matchScore: Math.round(finalScore * 10) / 10,
-        breakdown: {
-          skill: Math.round(skill.score * 100),
-          time: Math.round(time.score * 100),
-          location: Math.round(location.score * 100),
-          performance: Math.round(performance.score * 100),
-        },
-        reasons: [skill.detail, time.detail, location.detail, performance.detail],
+        breakdown,
+        reasons: buildMatchReasons(breakdown, factorDetails),
       };
     })
     .sort((a, b) => b.matchScore - a.matchScore)
@@ -299,9 +339,9 @@ const getRecommendations = asyncHandler(async (req, res) => {
           return {
             userId: base.coachUser._id,
             profile: base.profile,
-            matchScore: row.score ?? base.matchScore,
+            matchScore: base.matchScore,
             breakdown: base.breakdown,
-            reasons: row.reasons?.length ? row.reasons : base.reasons,
+            reasons: base.reasons,
           };
         })
         .filter(Boolean);

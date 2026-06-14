@@ -5,6 +5,8 @@ import PlayerIcon from '../../components/player/PlayerIcon';
 import SkillArcRow from '../../components/player/SkillArcRow';
 import { playerBadgeLive, playerHeroBtnPrimary, playerHeroBtnSecondary } from '../../components/player/playerClassNames';
 import CoachAvatar from '../../components/CoachAvatar';
+import CoachLocationLines from '../../components/player/CoachLocationLines';
+import { playerLocationOrigin } from '../../utils/coachLocation';
 import { api, getErrorMessage } from '../../services/api';
 
 function greetingPrefix() {
@@ -53,6 +55,7 @@ export default function PlayerDashboard() {
   const [coaches, setCoaches] = useState(0);
   const [trainingRequests, setTrainingRequests] = useState([]);
   const [orders, setOrders] = useState(0);
+  const [playerOrigin, setPlayerOrigin] = useState('');
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -60,7 +63,7 @@ export default function PlayerDashboard() {
     (async () => {
       setErr('');
       try {
-        const [meRes, n, r, s, o, p, tr] = await Promise.all([
+        const [meRes, n, r, s, o, p, tr, profileRes] = await Promise.all([
           api.get('/auth/me'),
           api.get('/players/notifications'),
           api.get('/players/recommendations'),
@@ -68,6 +71,7 @@ export default function PlayerDashboard() {
           api.get('/players/orders'),
           api.get('/players/performance'),
           api.get('/players/training-requests'),
+          api.get('/players/me/profile').catch(() => ({ data: { data: null } })),
         ]);
         if (cancelled) return;
         setMe(meRes.data.data);
@@ -77,6 +81,7 @@ export default function PlayerDashboard() {
         setOrders(o.data.data?.length || 0);
         setPerfList(p.data.data || []);
         setTrainingRequests(tr.data.data || []);
+        setPlayerOrigin(playerLocationOrigin(profileRes.data?.data));
       } catch (e) {
         if (!cancelled) setErr(getErrorMessage(e));
       }
@@ -335,7 +340,6 @@ export default function PlayerDashboard() {
           <div className="grid gap-4 sm:grid-cols-2">
             {myCoaches.map(({ coachId, coach, acceptedAt }) => {
               const name = coach?.coachProfile?.fullName || coach?.email || 'Coach';
-              const city = coach?.coachProfile?.city;
               const specialties = coach?.coachProfile?.specialties;
               return (
                 <div
@@ -346,12 +350,11 @@ export default function PlayerDashboard() {
                   <div className="min-w-0 flex-1">
                     <p className="text-lg font-bold text-white">{name}</p>
                     <p className="mt-1 text-sm font-medium text-player-green">Your coach will train you</p>
-                    {city ? (
-                      <p className="mt-2 text-xs text-player-on-variant">
-                        <PlayerIcon name="location_on" className="mr-1 align-middle text-sm" />
-                        {city}
-                      </p>
-                    ) : null}
+                    <CoachLocationLines
+                      profile={coach?.coachProfile}
+                      playerOrigin={playerOrigin}
+                      className="mt-2"
+                    />
                     {specialties?.length ? (
                       <p className="mt-1 text-[10px] uppercase tracking-wider text-player-on-variant">
                         {specialties.slice(0, 3).join(' · ')}

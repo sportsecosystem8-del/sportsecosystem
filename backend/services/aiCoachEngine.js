@@ -106,12 +106,12 @@ async function callChatJson({ model, system, user }) {
 async function generateCoachRecommendations(input) {
   const cfg = providerConfig();
   const system =
-    'You are a sports recommendation engine. Return strict JSON only. Rank the best coaches for this player using skill fit, schedule fit, location fit, and performance fit.';
+    'You are a sports recommendation engine. Return strict JSON only. Re-rank coaches for this player. Do not invent match scores or percentages; baselineScore is already computed.';
   const user = JSON.stringify(
     {
-      task: 'Rank top coaches',
+      task: 'Rank top coaches by overall fit',
       output: {
-        rankedCoaches: [{ userId: 'coach_user_id', score: 0, reasons: ['why 1', 'why 2'] }],
+        rankedCoaches: [{ userId: 'coach_user_id' }],
       },
       constraints: {
         maxResults: input.limit,

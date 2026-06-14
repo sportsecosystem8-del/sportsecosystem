@@ -7,6 +7,8 @@ export default function CoachProfile() {
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
+  const [academyLocation, setAcademyLocation] = useState('');
+  const [locationMapUrl, setLocationMapUrl] = useState('');
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -21,6 +23,8 @@ export default function CoachProfile() {
         setFullName(p.fullName || '');
         setBio(p.bio || '');
         setCity(p.city || '');
+        setAcademyLocation(p.academyLocation || '');
+        setLocationMapUrl(p.locationMapUrl || '');
       })
       .catch((e) => setErr(getErrorMessage(e)));
   }, []);
@@ -34,7 +38,13 @@ export default function CoachProfile() {
     setErr('');
     setMsg('');
     try {
-      const { data } = await api.put('/coaches/me/profile', { fullName, bio, city });
+      const { data } = await api.put('/coaches/me/profile', {
+        fullName,
+        bio,
+        city,
+        academyLocation,
+        locationMapUrl: locationMapUrl.trim(),
+      });
       setProfile(data.data);
       setMsg('Profile updated.');
     } catch (e) {
@@ -96,7 +106,9 @@ export default function CoachProfile() {
           <CoachAvatar profile={profile} size="xl" cacheBust={photoVersion || undefined} />
           <div className="flex-1 text-center sm:text-left">
             <p className="font-display text-2xl tracking-wide text-white">{profile?.fullName || '—'}</p>
-            <p className="mt-1 text-sm text-slate-400">{profile?.city || 'City not set'}</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {profile?.academyLocation || profile?.city || 'Location not set'}
+            </p>
             <label className="mt-4 inline-block cursor-pointer rounded-lg bg-[#ff7524] px-4 py-2 text-xs font-bold uppercase tracking-wider text-black hover:brightness-95">
               {uploading ? 'Uploading…' : 'Change photo'}
               <input
@@ -127,6 +139,22 @@ export default function CoachProfile() {
           value={city}
           onChange={(e) => setCity(e.target.value)}
         />
+        <input
+          className="w-full border-b-2 border-player-inner bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]"
+          placeholder="Academy location (address or area)"
+          value={academyLocation}
+          onChange={(e) => setAcademyLocation(e.target.value)}
+        />
+        <input
+          className="w-full border-b-2 border-player-inner bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]"
+          placeholder="Google Maps link"
+          value={locationMapUrl}
+          onChange={(e) => setLocationMapUrl(e.target.value)}
+          required
+        />
+        <p className="text-[10px] uppercase tracking-wider text-slate-500">
+          Players see your academy address and map link on coach match cards.
+        </p>
         <textarea
           className="h-28 w-full border-b-2 border-player-inner bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]"
           placeholder="Bio"

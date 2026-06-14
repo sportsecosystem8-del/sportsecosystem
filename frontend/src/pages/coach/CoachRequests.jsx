@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
+import PlayerTrainingRequestCard from '../../components/coach/PlayerTrainingRequestCard';
 import { api, getErrorMessage } from '../../services/api';
+import { coachAcademyLabel, coachMapUrl } from '../../utils/coachLocation';
+
+function coachLocationOrigin(coachProfile) {
+  return coachMapUrl(coachProfile) || coachAcademyLabel(coachProfile) || '';
+}
 
 export default function CoachRequests() {
   const [list, setList] = useState([]);
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [scheduledAtById, setScheduledAtById] = useState({});
+  const [coachOrigin, setCoachOrigin] = useState('');
 
   const load = () =>
     api
@@ -15,6 +22,10 @@ export default function CoachRequests() {
 
   useEffect(() => {
     load();
+    api
+      .get('/coaches/me/profile')
+      .then((r) => setCoachOrigin(coachLocationOrigin(r.data?.data)))
+      .catch(() => {});
   }, []);
 
   const act = async (id, status) => {
@@ -67,57 +78,15 @@ export default function CoachRequests() {
       )}
       <ul className="mt-4 grid gap-6 xl:grid-cols-2">
         {list.map((r) => (
-          <li key={r._id} className="midnight-asymmetric relative overflow-hidden border-l-4 border-[#ff7524] bg-player-surface p-6 shadow-player-card">
-            <div className="mb-5 flex items-start justify-between">
-              <div>
-                <p className="font-display text-4xl text-white">
-                {r.player?.playerProfile?.fullName || r.player?.email || String(r.player?._id || r.player || '')}
-                </p>
-                <p className="font-headline text-[11px] uppercase tracking-[0.2em] text-slate-500">{r.status}</p>
-              </div>
-              <span
-                className={`rounded-full px-3 py-1 font-orbitron text-[10px] uppercase tracking-widest ${
-                  r.status === 'accepted'
-                    ? 'bg-player-green/15 text-player-green'
-                    : r.status === 'rejected'
-                      ? 'bg-red-500/15 text-red-300'
-                      : 'bg-[#ff7524]/10 text-[#ff7524]'
-                }`}
-              >
-                {r.status}
-              </span>
-            </div>
-            {r.message && <p className="mb-6 border-b border-[#ff7524]/20 bg-player-bg/60 p-3 text-sm italic text-slate-300">"{r.message}"</p>}
-            {r.status === 'pending' ? (
-              <div className="mb-5 space-y-2">
-                <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                  Schedule time (for Weekly Schedule)
-                </label>
-                <input
-                  type="datetime-local"
-                  className="w-full border-b-2 border-player-inner bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]"
-                  value={scheduledAtById[r._id] || ''}
-                  onChange={(e) => setScheduledAtById((prev) => ({ ...prev, [r._id]: e.target.value }))}
-                />
-                <p className="text-xs text-slate-500">
-                  Required to add the player to Weekly Schedule. Pick another slot if you get a 90-minute conflict.
-                </p>
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between border-t border-white/5 pt-5">
-              <span className="text-[10px] font-headline uppercase tracking-[0.22em] text-slate-500">Live request</span>
-              {r.status === 'pending' && (
-                <div className="flex gap-3">
-                  <button type="button" className="px-4 py-2 font-display text-xl tracking-[0.14em] text-slate-400 transition hover:text-red-400" onClick={() => act(r._id, 'rejected')}>
-                    DECLINE
-                  </button>
-                  <button type="button" className="bg-[#ff7524] px-6 py-2 font-display text-xl tracking-[0.14em] text-black shadow-[0_0_20px_rgba(255,107,0,0.25)] transition hover:brightness-110" onClick={() => act(r._id, 'accepted')}>
-                    ACCEPT
-                  </button>
-                </div>
-              )}
-            </div>
-          </li>
+          <PlayerTrainingRequestCard
+            key={r._id}
+            request={r}
+            coachOrigin={coachOrigin}
+            scheduledAt={scheduledAtById[r._id] || ''}
+            onScheduledAtChange={(value) => setScheduledAtById((prev) => ({ ...prev, [r._id]: value }))}
+            onAccept={() => act(r._id, 'accepted')}
+            onReject={() => act(r._id, 'rejected')}
+          />
         ))}
       </ul>
     </div>
