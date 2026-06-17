@@ -1,10 +1,12 @@
+import { resolveUserRefId } from './objectId';
+
 /** Accepted training-request players for coach dropdowns (plans, evaluations). */
 export function studentsFromAcceptedRequests(requests) {
   const seen = new Set();
   const list = [];
   for (const tr of requests) {
     if (tr.status !== 'accepted') continue;
-    const playerId = String(tr.player?._id || tr.player || '');
+    const playerId = resolveUserRefId(tr.player);
     if (!playerId || seen.has(playerId)) continue;
     seen.add(playerId);
     list.push({

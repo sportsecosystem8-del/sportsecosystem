@@ -14,6 +14,7 @@ const Notification = require('../models/Notification');
 const VerificationDocument = require('../models/VerificationDocument');
 const CoachFeedback = require('../models/CoachFeedback');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { resolveUserRefId } = require('../utils/objectId');
 const { hasOverlap } = require('../utils/groundBookings');
 const {
   GROUND_BOOKING_CURRENCY,
@@ -500,20 +501,21 @@ const listTrainingRequests = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  const playerIds = [...new Set(list.map((row) => String(row.player?._id || row.player)).filter(Boolean))];
+  const playerIds = [...new Set(list.map((row) => resolveUserRefId(row.player)).filter(Boolean))];
   let latestByPlayer = new Map();
   if (playerIds.length) {
     const perfRows = await PerformanceEvaluation.find({ player: { $in: playerIds } })
       .sort({ weekStartDate: -1 })
       .lean();
     for (const row of perfRows) {
-      const key = String(row.player);
-      if (!latestByPlayer.has(key)) latestByPlayer.set(key, row);
+      const key = resolveUserRefId(row.player);
+      if (!key || latestByPlayer.has(key)) continue;
+      latestByPlayer.set(key, row);
     }
   }
 
   const data = list.map((row) => {
-    const playerId = String(row.player?._id || row.player || '');
+    const playerId = resolveUserRefId(row.player) || '';
     const latest = latestByPlayer.get(playerId);
     return {
       ...row,
