@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import PlayerAvatar from '../../components/PlayerAvatar';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerIcon from '../../components/player/PlayerIcon';
 import { playerProfileInput, playerProfileSaveBtn } from '../../components/player/playerClassNames';
@@ -10,6 +11,7 @@ function labelCls() {
 
 export default function PlayerProfile() {
   const [me, setMe] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [sportPreference, setSportPreference] = useState('cricket');
@@ -19,6 +21,8 @@ export default function PlayerProfile() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +33,7 @@ export default function PlayerProfile() {
         if (cancelled) return;
         setMe(meRes.data.data);
         const p = profRes.data.data;
+        setProfile(p);
         setFullName(p.fullName || '');
         setPhone(p.phone || '');
         setSportPreference(p.sportPreference || 'cricket');
@@ -66,6 +71,38 @@ export default function PlayerProfile() {
     }
   };
 
+  const onPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const okType =
+      file.type.startsWith('image/') ||
+      /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(file.name || '');
+    if (!okType) {
+      setErr('Please choose an image file (JPG, PNG, or WebP).');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setErr('Image must be 8 MB or smaller.');
+      return;
+    }
+    setUploading(true);
+    setErr('');
+    setMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('image', file, file.name);
+      const { data } = await api.post('/players/me/profile-photo', fd);
+      setProfile(data.data);
+      setPhotoVersion(Date.now());
+      setMsg('Profile photo updated.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const email = me?.email || '—';
 
   return (
@@ -82,8 +119,18 @@ export default function PlayerProfile() {
               Keep your details current so coaches and bookings match your sport and location.
             </p>
           </div>
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-white/40 bg-player-bg/30 font-orbitron text-2xl font-black text-white backdrop-blur-sm">
-            {(fullName || email).slice(0, 2).toUpperCase()}
+          <div className="flex flex-col items-center gap-3 sm:items-end">
+            <PlayerAvatar profile={profile || { fullName }} size="xl" cacheBust={photoVersion || undefined} />
+            <label className="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white backdrop-blur-sm transition hover:border-player-green/50 hover:bg-player-green/20">
+              {uploading ? 'Uploading…' : 'Change photo'}
+              <input
+                type="file"
+                accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                className="sr-only"
+                onChange={onPhoto}
+                disabled={uploading}
+              />
+            </label>
           </div>
         </div>
       </section>
@@ -135,6 +182,7 @@ export default function PlayerProfile() {
                 className={playerProfileInput}
               >
                 <option value="cricket">Cricket</option>
+                <option value="football">Football</option>
                 <option value="badminton">Badminton</option>
               </select>
             </div>

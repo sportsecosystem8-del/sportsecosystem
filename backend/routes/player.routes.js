@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { body, query } = require('express-validator');
 const p = require('../controllers/playerController');
 const { authenticate, requireRole, loadUser } = require('../middleware/auth');
+const { uploadImage } = require('../middleware/upload');
 
 const r = Router();
 r.use(authenticate, loadUser, requireRole('player'));
@@ -11,11 +12,12 @@ r.put(
   '/me/profile',
   [
     body('fullName').optional().trim(),
-    body('sportPreference').optional().isIn(['cricket', 'badminton']),
+    body('sportPreference').optional().isIn(['cricket', 'football', 'badminton']),
     body('skillLevel').optional().isIn(['beginner', 'intermediate', 'advanced']),
   ],
   p.updateProfile
 );
+r.post('/me/profile-photo', uploadImage.single('image'), p.uploadProfilePhoto);
 r.get('/recommendations', [query('limit').optional().isInt({ min: 3, max: 5 })], p.getRecommendations);
 r.get('/coaches/:coachId/certificates', p.listCoachCertificates);
 r.get('/coaches/:coachId/certificates/:docId/file', p.streamCoachCertificateFile);

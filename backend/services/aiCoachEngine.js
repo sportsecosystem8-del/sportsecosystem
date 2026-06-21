@@ -132,14 +132,22 @@ async function generateCoachRecommendations(input) {
 async function generateTrainingPlanDraft(input) {
   const cfg = providerConfig();
   const system =
-    'You are an expert sports coach assistant. Return strict JSON only with actionable weekly plan content. Keep concise, practical, and safe.';
+    'You are an expert sports coach assistant. Return strict JSON only. Build a weekly plan from the player skill evaluation data. ' +
+    'Prioritize weakSkills and critical skills with specific drills. Mention scores when explaining why each drill is assigned. ' +
+    'Do not give generic plans — every exercise block must tie to listed weak skills. Keep concise, practical, and safe.';
   const user = JSON.stringify(
     {
-      task: 'Generate weekly training draft',
+      task: 'Generate personalized weekly training draft from skill evaluation gaps',
       output: {
         title: 'Week plan title',
-        goals: 'Main goals for this week',
-        exercises: 'Detailed exercise blocks and progression notes',
+        goals: 'Main goals — reference weak skills by name and score',
+        exercises: 'Day-by-day program with drills for each weak skill',
+        analysisSummary: 'Short analysis: weakest skills, why they need work, strengths to maintain',
+      },
+      constraints: {
+        mustReferenceWeakSkills: true,
+        weakSkills: input.skillGaps?.focusSkills || [],
+        criticalSkills: input.skillGaps?.critical || [],
       },
       context: input,
     },
@@ -149,7 +157,14 @@ async function generateTrainingPlanDraft(input) {
   const raw = await callChatJson({ model: cfg.planModel, system, user });
   const validated = validateTrainingPlanDraft(raw.payload);
   if (!validated) throw new Error('Invalid AI training plan payload');
-  return { ...validated, provider: raw.provider, model: cfg.planModel, latencyMs: raw.latencyMs };
+  const analysisSummary = String(raw.payload?.analysisSummary || '').trim().slice(0, 5000);
+  return {
+    ...validated,
+    analysisSummary: analysisSummary || undefined,
+    provider: raw.provider,
+    model: cfg.planModel,
+    latencyMs: raw.latencyMs,
+  };
 }
 
 module.exports = {

@@ -12,12 +12,13 @@ const nav = {
     { to: '/coach/profile', label: 'Profile' },
     { to: '/coach/subscription', label: 'Subscription' },
     { to: '/coach/requests', label: 'Requests' },
+    { to: '/coach/students', label: 'My students' },
     { to: '/coach/sessions', label: 'Sessions' },
+    { to: '/coach/attendance', label: 'Attendance' },
     { to: '/coach/plans', label: 'Weekly plans' },
     { to: '/coach/grounds', label: 'Grounds' },
     { to: '/coach/performance', label: 'Evaluations' },
     { to: '/coach/feedback', label: 'Feedback' },
-    { to: '/coach/payments', label: 'Payments' },
     { to: '/coach/notifications', label: 'Notifications' },
     { to: '/coach/documents', label: 'Documents' },
   ],
@@ -82,9 +83,13 @@ export default function AppLayout() {
                       ? 'subscriptions'
                     : item.label === 'Requests'
                       ? 'pending_actions'
-                      : item.label === 'Sessions'
+                      : item.label === 'My students'
+                        ? 'groups'
+                        : item.label === 'Sessions'
                         ? 'calendar_month'
-                        : item.label === 'Weekly plans'
+                        : item.label === 'Attendance'
+                          ? 'fact_check'
+                          : item.label === 'Weekly plans'
                           ? 'fitness_center'
                           : item.label === 'Grounds'
                             ? 'location_city'
@@ -92,9 +97,11 @@ export default function AppLayout() {
                             ? 'analytics'
                             : item.label === 'Feedback'
                               ? 'strategy'
-                              : item.label === 'Payments'
-                                ? 'payments'
-                                : 'verified'}
+                              : item.label === 'Notifications'
+                                ? 'notifications'
+                                : item.label === 'Documents'
+                                  ? 'folder'
+                                  : 'verified'}
                 </span>
                 <span>{item.label}</span>
               </NavLink>

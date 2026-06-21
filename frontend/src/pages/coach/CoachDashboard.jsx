@@ -3,10 +3,6 @@ import { Link } from 'react-router-dom';
 import CoachAvatar from '../../components/CoachAvatar';
 import { api, getErrorMessage } from '../../services/api';
 
-function playerInitial(name) {
-  return (name || 'P').trim().charAt(0).toUpperCase() || 'P';
-}
-
 function formatMoney(amount) {
   const n = Number(amount) || 0;
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -38,7 +34,6 @@ export default function CoachDashboard() {
 
   const chart = stats?.weeklyChart || [];
   const topPerformers = stats?.topPerformers || [];
-  const myStudents = stats?.myStudents || [];
   const maxBar = Math.max(...chart.map((d) => d.heightPercent), 1);
   const highlightIdx = chart.reduce((best, d, i) => (d.count > (chart[best]?.count ?? -1) ? i : best), 0);
 
@@ -102,7 +97,7 @@ export default function CoachDashboard() {
         </section>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="midnight-asymmetric border-l-4 border-[#ff7524] bg-player-container p-5 shadow-player-card">
           <p className="font-headline text-xs uppercase tracking-[0.16em] text-player-on-variant">Pending Requests</p>
           <p className="mt-2 font-orbitron text-3xl font-bold text-white">
@@ -129,58 +124,6 @@ export default function CoachDashboard() {
           </p>
           <p className="mt-1 text-[10px] text-slate-500">Sessions in the last 7 days</p>
         </div>
-        <div className="midnight-asymmetric border-l-4 border-emerald-400 bg-player-container p-5 shadow-player-card">
-          <p className="font-headline text-xs uppercase tracking-[0.16em] text-player-on-variant">My students</p>
-          <p className="mt-2 font-orbitron text-3xl font-bold text-white">
-            {loading ? '…' : (stats?.activeStudents ?? myStudents.length)}
-          </p>
-          <p className="mt-1 text-[10px] text-slate-500">Accepted training requests</p>
-        </div>
-      </section>
-
-      <section className="midnight-asymmetric bg-player-container p-6 shadow-player-card">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-headline text-xl font-bold uppercase tracking-[0.08em] text-white">My students</h2>
-          <Link to="/coach/requests" className="font-headline text-[10px] uppercase tracking-widest text-[#ff7524] hover:underline">
-            View requests
-          </Link>
-        </div>
-        <p className="mb-4 text-sm text-slate-400">Players you accepted for training — manage their sessions and weekly plans.</p>
-        {loading ? (
-          <p className="text-sm text-slate-500">Loading…</p>
-        ) : myStudents.length ? (
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {myStudents.map((s) => (
-              <li
-                key={s.playerId}
-                className="flex gap-3 rounded-xl border border-white/10 bg-player-bg/80 p-4 transition-colors hover:border-[#ff7524]/40"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#ff7524]/20 font-display text-xl text-[#ff7524]">
-                  {playerInitial(s.fullName)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-white">{s.fullName}</p>
-                  <p className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">
-                    {s.sportPreference || 'Sport'}
-                    {s.city ? ` · ${s.city}` : ''}
-                  </p>
-                  {s.skillLevel ? <p className="mt-1 text-xs text-slate-400">Level: {s.skillLevel}</p> : null}
-                  {s.nextSessionAt ? (
-                    <p className="mt-2 text-xs text-player-green">
-                      Next session: {new Date(s.nextSessionAt).toLocaleString()}
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-xs text-slate-500">No upcoming session scheduled</p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-slate-500">
-            No students yet. Accept a training request from the Requests page to add players here.
-          </p>
-        )}
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import ProductImage from '../../components/ProductImage';
+import { formatProductPrice } from '../../utils/productCurrency';
 import { api, getErrorMessage } from '../../services/api';
 
 export default function PlayerOrders() {
@@ -23,7 +24,10 @@ export default function PlayerOrders() {
         {orders.map((o) => (
           <PlayerCard key={o._id} className="text-sm">
             <span className="font-bold text-player-green">{o.status}</span>
-            <span className="text-player-on-variant"> — total {o.totalAmount}</span>
+            <span className="text-player-on-variant"> — {formatProductPrice(o.totalAmount)}</span>
+            {o.paymentMethod === 'cod' ? (
+              <p className="mt-1 text-xs text-amber-200/90">Cash on delivery — pay when you receive the order.</p>
+            ) : null}
             {o.trackingNumber ? (
               <p className="mt-2 font-orbitron text-xs text-player-green">Tracking: {o.trackingNumber}</p>
             ) : null}

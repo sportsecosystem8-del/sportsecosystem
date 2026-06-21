@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { coachBtnPrimary, coachLabel, coachSelect } from '../../components/coach/coachClassNames';
+import CoachPlanCard from '../../components/coach/CoachPlanCard';
+import { coachBtnPrimary, coachLabel } from '../../components/coach/coachClassNames';
+import CoachStudentPicker from '../../components/coach/CoachStudentPicker';
 import { api, getErrorMessage } from '../../services/api';
 import { studentsFromAcceptedRequests } from '../../utils/coachStudents';
 
@@ -23,6 +25,10 @@ function mondayInputValue(d = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+function weekStartIso(dateStr) {
+  return new Date(dateStr).toISOString();
+}
+
 /** Weekly plans; publish auto-drafts */
 export default function CoachPlans() {
   const [list, setList] = useState([]);
@@ -34,12 +40,31 @@ export default function CoachPlans() {
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [autoGenerating, setAutoGenerating] = useState(false);
-  const [publishNow, setPublishNow] = useState(true);
+  const [busyPlanId, setBusyPlanId] = useState(null);
+  const [publishNow, setPublishNow] = useState(false);
+
+  const [evalReady, setEvalReady] = useState(null);
 
   const studentNameById = useMemo(
     () => Object.fromEntries(students.map((s) => [s.playerId, s.fullName])),
-    [students]
+    [students],
   );
+
+  useEffect(() => {
+    if (!player) {
+      setEvalReady(null);
+      return;
+    }
+    api
+      .get('/coaches/training-requests')
+      .then((r) => {
+        const row = (r.data.data || []).find(
+          (req) => req.status === 'accepted' && String(req.player?._id || req.player) === String(player),
+        );
+        setEvalReady(Boolean(row?.latestPerformance?.hasSkillEvaluation));
+      })
+      .catch(() => setEvalReady(null));
+  }, [player]);
 
   const loadPlans = () =>
     api
@@ -67,6 +92,16 @@ export default function CoachPlans() {
     load();
   }, []);
 
+  const runAutoDraft = async ({ playerId, weekDate, publish, replaceExisting = true }) => {
+    const { data } = await api.post('/coaches/training-plans/auto-draft', {
+      playerId,
+      weekStartDate: weekStartIso(weekDate),
+      publishNow: publish,
+      replaceExisting,
+    });
+    return data;
+  };
+
   const generateAutoDraft = async () => {
     if (!player) {
       setErr('Select a student first.');
@@ -77,22 +112,60 @@ export default function CoachPlans() {
     setAutoGenerating(true);
     const name = studentNameById[player] || 'student';
     try {
-      const { data } = await api.post('/coaches/training-plans/auto-draft', {
+      const data = await runAutoDraft({
         playerId: player,
-        weekStartDate: weekStart ? new Date(weekStart).toISOString() : undefined,
-        publishNow,
+        weekDate: weekStart,
+        publish: publishNow,
+        replaceExisting: true,
       });
       setOk(
         data.message ||
           (data.published
-            ? `Plan is live for ${name} — check Player → Schedule.`
-            : `Draft saved for ${name}. Click Publish below so they can see it.`)
+            ? `Personalized plan live for ${name}.`
+            : `Evaluation-based draft ready for ${name}. Review the card below, then publish.`)
       );
       loadPlans();
     } catch (er) {
       setErr(getErrorMessage(er));
     } finally {
       setAutoGenerating(false);
+    }
+  };
+
+  const regeneratePlan = async (plan) => {
+    const playerId = String(plan.player?._id || plan.player);
+    const weekDate = new Date(plan.weekStartDate).toISOString().slice(0, 10);
+    setBusyPlanId(plan._id);
+    setErr('');
+    setOk('');
+    try {
+      const data = await runAutoDraft({
+        playerId,
+        weekDate,
+        publish: false,
+        replaceExisting: true,
+      });
+      setOk(data.message || 'Plan regenerated from latest evaluation.');
+      loadPlans();
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    } finally {
+      setBusyPlanId(null);
+    }
+  };
+
+  const deleteDraft = async (id) => {
+    if (!window.confirm('Delete this draft?')) return;
+    setBusyPlanId(id);
+    setErr('');
+    try {
+      await api.delete(`/coaches/training-plans/${id}`);
+      setOk('Draft deleted.');
+      loadPlans();
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    } finally {
+      setBusyPlanId(null);
     }
   };
 
@@ -107,7 +180,7 @@ export default function CoachPlans() {
     try {
       await api.post('/coaches/training-plans', {
         player,
-        weekStartDate: new Date(weekStart).toISOString(),
+        weekStartDate: weekStartIso(weekStart),
         title,
         goals,
         exercises: goals,
@@ -122,13 +195,16 @@ export default function CoachPlans() {
   };
 
   const publish = async (id) => {
+    setBusyPlanId(id);
     setErr('');
     try {
       await api.put(`/coaches/training-plans/${id}`, { status: 'published', coachReviewed: true });
-      setOk('Plan published to player.');
+      setOk('Plan published — player gets skill feedback notification.');
       loadPlans();
     } catch (er) {
       setErr(getErrorMessage(er));
+    } finally {
+      setBusyPlanId(null);
     }
   };
 
@@ -136,38 +212,41 @@ export default function CoachPlans() {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-5xl tracking-[0.08em] text-white">TRAINING ARSENALS</h1>
-        <p className="font-headline text-xs uppercase tracking-[0.3em] text-slate-500">Weekly tactical plans</p>
+        <p className="font-headline text-xs uppercase tracking-[0.3em] text-slate-500">
+          Evaluation-driven weekly plans
+        </p>
         {err ? <p className="mt-2 text-sm text-red-400">{err}</p> : null}
-        {ok ? <p className="mt-2 text-sm text-[#ff7524]">{ok}</p> : null}
+        {ok ? <p className="mt-2 text-sm text-[#9bffce]">{ok}</p> : null}
       </div>
 
       <div className="midnight-asymmetric max-w-xl space-y-3 border border-[#ff7524]/30 bg-player-container p-5 shadow-player-card">
-        <p className="font-display text-2xl tracking-[0.12em] text-white">GENERATE AUTO DRAFT</p>
+        <p className="font-display text-2xl tracking-[0.12em] text-white">GENERATE FROM EVALUATION</p>
         <p className="text-sm text-slate-400">
-          Select the student, then generate their AI weekly draft. Players only see plans after you publish.
+          System reads sub-technique scores (cover drive, passing, etc.), picks weak areas, and builds goals + a
+          day-by-day program. Regenerating replaces any existing draft for that week.
         </p>
+        {player && evalReady === false ? (
+          <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            No skill evaluation yet.{' '}
+            <Link to="/coach/performance" className="text-[#ff7524] hover:underline">
+              Complete evaluation first
+            </Link>
+          </p>
+        ) : null}
+        {player && evalReady ? (
+          <p className="rounded border border-player-green/30 bg-player-green/10 px-3 py-2 text-xs text-player-green">
+            Ready — weak skills will drive the weekly plan and player message.
+          </p>
+        ) : null}
         <div>
           <label className={coachLabel}>Student</label>
           {students.length ? (
-            <select
-              className={`${coachSelect} mt-2`}
-              value={player}
-              onChange={(e) => setPlayer(e.target.value)}
-            >
-              <option value="">Select student…</option>
-              {students.map((s) => (
-                <option key={s.playerId} value={s.playerId}>
-                  {s.fullName}
-                  {s.sportPreference ? ` · ${s.sportPreference}` : ''}
-                  {s.city ? ` · ${s.city}` : ''}
-                </option>
-              ))}
-            </select>
+            <CoachStudentPicker students={students} value={player} onChange={setPlayer} />
           ) : (
             <p className="mt-2 text-sm text-slate-400">
-              No active students yet. Accept a training request from{' '}
-              <Link to="/coach/requests" className="text-[#ff7524] underline-offset-2 hover:underline">
-                Requests
+              No active students yet.{' '}
+              <Link to="/coach/requests" className="text-[#ff7524] hover:underline">
+                Accept a request
               </Link>{' '}
               first.
             </p>
@@ -191,15 +270,15 @@ export default function CoachPlans() {
             disabled={!students.length}
             className="accent-[#ff7524]"
           />
-          Publish to player now (shows on their Schedule)
+          Publish immediately after generate (skip draft review)
         </label>
         <button
           type="button"
-          disabled={!students.length || !player || autoGenerating}
+          disabled={!students.length || !player || autoGenerating || evalReady === false}
           onClick={generateAutoDraft}
           className={`${coachBtnPrimary} disabled:cursor-not-allowed disabled:opacity-50`}
         >
-          {autoGenerating ? 'Generating…' : publishNow ? 'GENERATE & PUBLISH' : 'SAVE DRAFT ONLY'}
+          {autoGenerating ? 'Analyzing & building…' : publishNow ? 'Generate & publish' : 'Generate draft'}
         </button>
       </div>
 
@@ -207,8 +286,8 @@ export default function CoachPlans() {
         onSubmit={create}
         className="midnight-asymmetric max-w-xl space-y-3 border border-player-inner/40 bg-player-container p-5 shadow-player-card"
       >
-        <p className="font-display text-2xl tracking-[0.12em] text-white">FORGE NEW PLAN (manual)</p>
-        <p className="text-sm text-slate-500">Uses the same student and week selected above.</p>
+        <p className="font-display text-2xl tracking-[0.12em] text-white">MANUAL PLAN</p>
+        <p className="text-sm text-slate-500">Optional — bypasses evaluation engine.</p>
         <input
           className={fieldClass}
           placeholder="Title"
@@ -228,64 +307,26 @@ export default function CoachPlans() {
           disabled={!students.length || !player}
           className="w-full bg-[#ff7524] py-3 font-display text-xl tracking-[0.14em] text-black disabled:cursor-not-allowed disabled:opacity-50"
         >
-          SAVE MANUAL PLAN
+          Save manual plan
         </button>
       </form>
+
       <ul className="grid gap-6 lg:grid-cols-2">
-        {list.map((p) => {
-          const studentName = planStudentName(p, studentNameById);
-          return (
-            <li
-              key={p._id}
-              className="midnight-asymmetric border border-player-inner/40 bg-player-container p-5 text-sm shadow-player-card"
-            >
-              <p className="mb-1 font-headline text-[10px] font-bold uppercase tracking-[0.2em] text-[#ff7524]">
-                {p.isAutoGenerated ? 'Auto draft for' : 'Plan for'} {studentName}
-              </p>
-              <div className="mb-2 flex items-start justify-between">
-                <span className="font-display text-3xl text-white">{p.title}</span>
-                <span
-                  className={`rounded-full px-2 py-1 font-orbitron text-[10px] uppercase tracking-widest ${
-                    p.status === 'draft' ? 'bg-amber-500/20 text-amber-200' : 'bg-player-green/10 text-player-green'
-                  }`}
-                >
-                  {p.status}
-                  {p.isAutoGenerated ? ' · auto' : ''}
-                  {p.generationMethod === 'ai' ? ' · ai' : ''}
-                </span>
-              </div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                Source:{' '}
-                {p.generationMethod === 'ai'
-                  ? 'AI Draft'
-                  : p.generationMethod === 'manual'
-                    ? 'Manual'
-                    : 'Rules Fallback'}
-              </p>
-              <p className="font-headline text-xs uppercase tracking-[0.2em] text-slate-500">
-                {studentName} · week of {new Date(p.weekStartDate).toLocaleDateString()}
-              </p>
-            {p.status === 'draft' ? (
-              <p className="mt-1 text-xs font-medium text-amber-200">
-                Draft — {studentName} cannot see this yet. Click Publish below.
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-player-green">Published — visible on player Schedule.</p>
-            )}
-              <pre className="mt-3 whitespace-pre-wrap text-xs text-slate-300">{p.goals || p.exercises}</pre>
-              {p.status === 'draft' ? (
-                <button
-                  type="button"
-                  className="mt-4 w-full bg-player-green/20 py-2 font-display text-sm text-player-green"
-                  onClick={() => publish(p._id)}
-                >
-                  Publish to {studentName}
-                </button>
-              ) : null}
-            </li>
-          );
-        })}
+        {list.map((p) => (
+          <CoachPlanCard
+            key={p._id}
+            plan={p}
+            studentName={planStudentName(p, studentNameById)}
+            onPublish={publish}
+            onRegenerate={regeneratePlan}
+            onDelete={deleteDraft}
+            busyId={busyPlanId}
+          />
+        ))}
       </ul>
+      {!list.length ? (
+        <p className="text-sm text-slate-500">No plans yet. Complete an evaluation, then generate above.</p>
+      ) : null}
     </div>
   );
 }

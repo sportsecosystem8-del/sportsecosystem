@@ -37,7 +37,7 @@ const sections = [
     title: 'Operations',
     items: [
       { to: '/admin/monitor/bookings', label: 'Monitor bookings', icon: 'event_note' },
-      { to: '/admin/monitor/performance', label: 'Monitor performance', icon: 'monitoring' },
+      { to: '/admin/monitor/performance', label: 'System monitor', icon: 'monitoring' },
     ],
   },
   {

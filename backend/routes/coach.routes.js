@@ -57,6 +57,7 @@ r.post(
     body('playerId').isMongoId().withMessage('Valid player id required'),
     body('weekStartDate').optional(),
     body('publishNow').optional().isBoolean(),
+    body('replaceExisting').optional().isBoolean(),
   ],
   validateRequest,
   c.generateAutoTrainingPlan
@@ -71,13 +72,17 @@ r.post(
   c.createTrainingPlan
 );
 r.get('/training-plans', c.listTrainingPlans);
+r.delete('/training-plans/:id', c.deleteTrainingPlan);
 r.put('/training-plans/:id', c.updateTrainingPlan);
+r.get('/attendance', c.listAttendance);
 r.post(
   '/sessions/:sessionId/attendance',
   [param('sessionId').isMongoId(), body('present').isBoolean()],
   validateRequest,
   c.markAttendance
 );
+r.get('/evaluation-rubrics', c.listEvaluationRubricsHandler);
+r.get('/evaluation-rubric', c.getEvaluationRubricHandler);
 r.post(
   '/performance',
   [
@@ -86,6 +91,10 @@ r.post(
     body('technique').optional().isFloat({ min: 0, max: 100 }),
     body('fitness').optional().isFloat({ min: 0, max: 100 }),
     body('attitude').optional().isFloat({ min: 0, max: 100 }),
+    body('skillScores').optional().isArray(),
+    body('skillScores.*.category').optional().isString(),
+    body('skillScores.*.skill').optional().isString(),
+    body('skillScores.*.score').optional().isFloat({ min: 0, max: 100 }),
   ],
   validateRequest,
   c.addPerformance

@@ -98,7 +98,7 @@ Auth: `Authorization: Bearer <JWT>` unless noted.
 | CRUD | `/admin/sports` | Sport categories |
 | CRUD | `/admin/grounds` | Grounds & slots config |
 | GET | `/admin/monitor/bookings` | Ground bookings |
-| GET | `/admin/monitor/performance` | Performance & attendance |
+| GET | `/admin/monitor/performance` | System health & platform stats |
 | GET | `/admin/complaints` | Complaints list |
 | PATCH | `/admin/complaints/:id` | Resolve |
 | GET | `/admin/reports/summary` | Reports |

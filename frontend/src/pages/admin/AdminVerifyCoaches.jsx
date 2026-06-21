@@ -64,9 +64,44 @@ export default function AdminVerifyCoaches() {
               <div className="flex gap-4">
                 <CoachAvatar profile={u.coachProfile} size="md" />
                 <div>
-                <p className="text-base font-bold text-white">{u.coachProfile?.fullName || '—'}</p>
-                <p className="mt-1 font-label text-sm text-slate-400">{u.email}</p>
-                <p className="mt-2 font-label text-xs text-slate-500">Status: {u.verificationStatus}</p>
+                  <p className="text-base font-bold text-white">{u.coachProfile?.fullName || '—'}</p>
+                  <p className="mt-1 font-label text-sm text-slate-400">{u.email}</p>
+                  {u.coachProfile?.phone ? (
+                    <p className="mt-1 font-label text-xs text-slate-400">Phone: {u.coachProfile.phone}</p>
+                  ) : null}
+                  {u.coachProfile?.academyLocation || u.coachProfile?.city ? (
+                    <p className="mt-1 font-label text-xs text-slate-400">
+                      Location:{' '}
+                      {[u.coachProfile?.academyLocation, u.coachProfile?.city].filter(Boolean).join(', ')}
+                    </p>
+                  ) : null}
+                  {u.coachProfile?.specialties?.length ? (
+                    <p className="mt-1 font-label text-xs text-slate-400">
+                      Specialties: {u.coachProfile.specialties.join(', ')}
+                    </p>
+                  ) : null}
+                  {u.coachProfile?.yearsExperience != null ? (
+                    <p className="mt-1 font-label text-xs text-slate-400">
+                      Experience: {u.coachProfile.yearsExperience} year
+                      {u.coachProfile.yearsExperience === 1 ? '' : 's'}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 font-label text-xs text-slate-400">
+                    Map:{' '}
+                    {u.coachProfile?.locationMapUrl ? (
+                      <a
+                        href={u.coachProfile.locationMapUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-admin-cyan underline-offset-2 hover:underline"
+                      >
+                        Open location
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </p>
+                  <p className="mt-2 font-label text-xs text-slate-500">Status: {u.verificationStatus}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">

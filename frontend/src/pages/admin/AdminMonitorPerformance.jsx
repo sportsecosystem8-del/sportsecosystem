@@ -3,15 +3,25 @@ import AdminCard from '../../components/admin/AdminCard';
 import AdminPageHeader from '../../components/admin/AdminPageHeader';
 import { api, getErrorMessage } from '../../services/api';
 
-function Panel({ title, accent, children }) {
+function Stat({ label, value, ok }) {
   return (
-    <AdminCard accent={accent} className="overflow-hidden">
-      <div className="border-b border-white/5 px-6 py-4">
-        <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">{title}</h2>
-      </div>
-      <ul className="max-h-64 divide-y divide-white/[0.04] overflow-y-auto admin-scrollbar text-sm">{children}</ul>
-    </AdminCard>
+    <div>
+      <p className="font-headline text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className={`mt-1 font-orbitron text-lg font-bold tabular-nums ${ok === false ? 'text-admin-orange' : 'text-white'}`}>
+        {value ?? '—'}
+      </p>
+    </div>
   );
+}
+
+function formatUptime(sec) {
+  if (sec == null) return '—';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 export default function AdminMonitorPerformance() {
@@ -24,11 +34,16 @@ export default function AdminMonitorPerformance() {
       .catch((e) => setErr(getErrorMessage(e)));
   }, []);
 
+  const health = data?.health;
+  const services = data?.services;
+  const stats = data?.stats;
+  const dbOk = health?.database === 'connected';
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Performance monitor"
-        subtitle="Evaluations and attendance records."
+        title="System monitor"
+        subtitle="Platform and API health status."
       />
       {err ? (
         <AdminCard accent="orange" className="p-4">
@@ -36,43 +51,38 @@ export default function AdminMonitorPerformance() {
         </AdminCard>
       ) : null}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Evaluations" accent="cyan">
-          {(data?.performance || []).map((p) => (
-            <li key={p._id} className="px-6 py-3.5 transition-colors hover:bg-white/[0.04]">
-              <span className="font-orbitron font-bold text-admin-cyan">T:{p.technique}</span>
-              <span className="text-slate-500"> · </span>
-              <span className="text-slate-300">F:{p.fitness}</span>
-              <span className="text-slate-500"> · </span>
-              <span className="text-slate-300">A:{p.attitude}</span>
-              <p className="mt-1 font-label text-xs text-slate-500">
-                Week {p.weekStartDate ? new Date(p.weekStartDate).toLocaleDateString() : '—'}
-              </p>
-            </li>
-          ))}
-          {!(data?.performance || []).length ? (
-            <li className="px-6 py-10 text-center font-label text-sm text-slate-500">No evaluations.</li>
-          ) : null}
-        </Panel>
-        <Panel title="Attendance" accent="orange">
-          {(data?.attendance || []).map((a) => (
-            <li
-              key={a._id}
-              className="flex items-center justify-between px-6 py-3.5 transition-colors hover:bg-white/[0.04]"
-            >
-              <span className="text-slate-300">{a.present ? 'Present' : 'Absent'}</span>
-              <span
-                className={`rounded-full px-2.5 py-0.5 font-label text-xs font-bold ${
-                  a.present ? 'bg-emerald-500/10 text-emerald-400' : 'bg-admin-orange/15 text-admin-orange'
-                }`}
-              >
-                {a.present ? 'OK' : 'Missed'}
-              </span>
-            </li>
-          ))}
-          {!(data?.attendance || []).length ? (
-            <li className="px-6 py-10 text-center font-label text-sm text-slate-500">No attendance rows.</li>
-          ) : null}
-        </Panel>
+        <AdminCard accent="cyan" className="p-6">
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">API & server</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Stat label="Database" value={health?.database} ok={dbOk} />
+            <Stat label="Uptime" value={formatUptime(health?.uptimeSec)} />
+            <Stat label="Environment" value={health?.nodeEnv} />
+            <Stat label="Node" value={health?.nodeVersion} />
+          </div>
+        </AdminCard>
+        <AdminCard accent="orange" className="p-6">
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">Memory (MB)</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Stat label="Heap used" value={health?.memoryMb?.heapUsed} />
+            <Stat label="Heap total" value={health?.memoryMb?.heapTotal} />
+            <Stat label="RSS" value={health?.memoryMb?.rss} />
+          </div>
+        </AdminCard>
+        <AdminCard accent="gold" className="p-6">
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">Services</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Stat label="Stripe payments" value={services?.stripe ? 'Enabled' : 'Mock / off'} ok={services?.stripe} />
+            <Stat label="Email mailer" value={services?.mailer ? 'Configured' : 'Not configured'} ok={services?.mailer} />
+          </div>
+        </AdminCard>
+        <AdminCard accent="none" className="border border-white/[0.06] p-6">
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">Platform stats</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Stat label="Total users" value={stats?.users} />
+            <Stat label="Ground bookings" value={stats?.bookings} />
+            <Stat label="Completed payments" value={stats?.paymentsCompleted} />
+          </div>
+        </AdminCard>
       </div>
     </div>
   );

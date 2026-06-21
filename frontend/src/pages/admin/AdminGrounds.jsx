@@ -8,6 +8,24 @@ import { groundImageList, groundLocationLabel, isMapUrl } from '../../utils/grou
 
 const MIN_GROUND_IMAGES = 3;
 
+const fieldLabelClass = 'mb-1 block font-label text-[11px] font-semibold uppercase tracking-wider text-slate-500';
+
+function FieldLabel({ children, required }) {
+  return (
+    <label className={fieldLabelClass}>
+      {children}
+      {required ? ' *' : ''}
+    </label>
+  );
+}
+
+function SectionHeading({ children, accent = 'cyan' }) {
+  const color = accent === 'green' ? 'text-[#9bffce]' : 'text-admin-cyan';
+  return (
+    <h3 className={`font-headline text-xs font-bold uppercase tracking-[0.14em] ${color}`}>{children}</h3>
+  );
+}
+
 export default function AdminGrounds() {
   const [list, setList] = useState([]);
   const [name, setName] = useState('');
@@ -125,117 +143,183 @@ export default function AdminGrounds() {
       ) : null}
 
       <AdminCard accent="cyan" className="p-6">
-        <h2 className="mb-4 font-headline text-xs font-bold uppercase tracking-widest text-slate-400">
-          Add ground
-        </h2>
-        <form onSubmit={create} className="grid gap-3 md:grid-cols-2">
-          <input
-            className={adminField}
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <select className={adminSelect} value={sportType} onChange={(e) => setSportType(e.target.value)}>
-            <option value="cricket">Cricket</option>
-            <option value="badminton">Badminton</option>
-          </select>
-          <input
-            className={adminField}
-            placeholder="City"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            required
-          />
-          <input
-            className={adminField}
-            placeholder="Ground address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            required
-          />
-          <input
-            className={`${adminField} md:col-span-2`}
-            placeholder="Ground location (area, landmark, or Google Maps link)"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            required
-          />
-          <input
-            className={adminField}
-            placeholder="Owner name"
-            value={ownerName}
-            onChange={(e) => setOwnerName(e.target.value)}
-            required
-          />
-          <input
-            className={adminField}
-            placeholder="Owner phone"
-            value={ownerPhone}
-            onChange={(e) => setOwnerPhone(e.target.value)}
-            required
-          />
-          <input
-            className={adminField}
-            placeholder="Owner address"
-            value={ownerAddress}
-            onChange={(e) => setOwnerAddress(e.target.value)}
-            required
-          />
-          <input
-            className={adminField}
-            placeholder="Owner location / map link"
-            value={ownerLocation}
-            onChange={(e) => setOwnerLocation(e.target.value)}
-            required
-          />
-          <input
-            type="time"
-            className={adminField}
-            value={openTime}
-            onChange={(e) => setOpenTime(e.target.value)}
-            required
-          />
-          <input
-            type="time"
-            className={adminField}
-            value={closeTime}
-            onChange={(e) => setCloseTime(e.target.value)}
-            required
-          />
-          <input
-            type="number"
-            min="15"
-            className={adminField}
-            placeholder="Slot duration (minutes)"
-            value={slotDurationMinutes}
-            onChange={(e) => setSlotDurationMinutes(e.target.value)}
-            required
-          />
-          <input
-            type="number"
-            min="1"
-            step="1"
-            className={adminField}
-            placeholder="Ground length (feet)"
-            value={lengthFeet}
-            onChange={(e) => setLengthFeet(e.target.value)}
-            required
-          />
-          <input
-            type="number"
-            min="1"
-            step="1"
-            className={adminField}
-            placeholder="Area (square feet)"
-            value={areaSqFt}
-            onChange={(e) => setAreaSqFt(e.target.value)}
-            required
-          />
-          <div className="md:col-span-2 space-y-3">
-            <label className="block font-label text-[11px] uppercase tracking-wider text-slate-500">
-              Ground photos (minimum {MIN_GROUND_IMAGES}, add more if needed) *
-            </label>
+        <h2 className="mb-1 font-headline text-sm font-bold uppercase tracking-wide text-white">Add ground</h2>
+        <p className="mb-6 font-label text-xs text-slate-500">
+          Register a venue with owner details, opening hours, and at least {MIN_GROUND_IMAGES} photos.
+        </p>
+        <form onSubmit={create} className="space-y-8">
+          <section className="space-y-4">
+            <SectionHeading>1 · Ground details</SectionHeading>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel required>Name</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="e.g. Arena Indoor Cricket"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Sport</FieldLabel>
+                <select className={adminSelect} value={sportType} onChange={(e) => setSportType(e.target.value)}>
+                  <option value="cricket">Cricket</option>
+                  <option value="badminton">Badminton</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel required>City</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="e.g. Lahore"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Ground address</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="Street address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <FieldLabel required>Ground location</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="Area, landmark, or Google Maps link"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SectionHeading>2 · Owner details</SectionHeading>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel required>Owner name</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="Full name"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Owner phone</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="03XX XXXXXXX"
+                  value={ownerPhone}
+                  onChange={(e) => setOwnerPhone(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Owner address</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="Owner postal address"
+                  value={ownerAddress}
+                  onChange={(e) => setOwnerAddress(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Owner location</FieldLabel>
+                <input
+                  className={adminField}
+                  placeholder="Area or map link"
+                  value={ownerLocation}
+                  onChange={(e) => setOwnerLocation(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SectionHeading accent="green">3 · Hours & slots</SectionHeading>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel required>Opens at</FieldLabel>
+                <input
+                  type="time"
+                  className={adminField}
+                  value={openTime}
+                  onChange={(e) => setOpenTime(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Closes at</FieldLabel>
+                <input
+                  type="time"
+                  className={adminField}
+                  value={closeTime}
+                  onChange={(e) => setCloseTime(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Slot duration (minutes)</FieldLabel>
+                <input
+                  type="number"
+                  min="15"
+                  className={adminField}
+                  placeholder="60"
+                  value={slotDurationMinutes}
+                  onChange={(e) => setSlotDurationMinutes(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SectionHeading accent="green">4 · Dimensions</SectionHeading>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel required>Ground length (feet)</FieldLabel>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className={adminField}
+                  placeholder="e.g. 120"
+                  value={lengthFeet}
+                  onChange={(e) => setLengthFeet(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <FieldLabel required>Area (square feet)</FieldLabel>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className={adminField}
+                  placeholder="e.g. 8000"
+                  value={areaSqFt}
+                  onChange={(e) => setAreaSqFt(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeading>5 · Photos</SectionHeading>
+            <FieldLabel required>Ground photos (minimum {MIN_GROUND_IMAGES})</FieldLabel>
             <div className="flex flex-wrap items-center gap-3">
               <label className="cursor-pointer rounded-md border border-dashed border-white/20 px-4 py-2 text-sm text-slate-400 transition-colors hover:border-admin-cyan hover:text-admin-cyan">
                 {photoUploading ? 'Uploading…' : 'Choose photos'}
@@ -275,82 +359,102 @@ export default function AdminGrounds() {
                 ))}
               </ul>
             ) : null}
-          </div>
-          <div className="md:col-span-2">
-            <button type="submit" className={adminBtnPrimary} disabled={photoUploading}>
-              Add
-            </button>
-          </div>
+          </section>
+
+          <button type="submit" className={adminBtnPrimary} disabled={photoUploading}>
+            Add ground
+          </button>
         </form>
       </AdminCard>
 
-      <AdminCard accent="none" className="overflow-hidden border border-white/[0.06]">
-        <div className="border-b border-white/5 px-6 py-4">
-          <h2 className="font-headline text-sm font-bold uppercase text-white">All grounds</h2>
-        </div>
-        <ul className="max-h-[min(60vh,440px)] divide-y divide-white/[0.04] overflow-y-auto admin-scrollbar">
-          {list.map((g) => {
-            const images = groundImageList(g);
-            const loc = groundLocationLabel(g);
-            return (
-              <li key={g._id} className="flex gap-4 px-6 py-3.5 text-sm transition-colors hover:bg-white/[0.04]">
-                {images.length ? (
-                  <div className="flex shrink-0 gap-1">
-                    {images.slice(0, 3).map((path, i) => (
-                      <img
-                        key={`${path}-${i}`}
-                        src={publicAssetUrl(path)}
-                        alt=""
-                        className="h-14 w-16 rounded-md object-cover"
-                      />
-                    ))}
-                    {images.length > 3 ? (
-                      <span className="flex h-14 w-8 items-center justify-center rounded-md bg-admin-surface-low text-[10px] text-slate-400">
-                        +{images.length - 3}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="h-14 w-20 shrink-0 rounded-md bg-admin-surface-low" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <span className="font-semibold text-slate-200">{g.name}</span>
-                  <span className="mx-2 text-slate-600">·</span>
-                  <span className="capitalize text-slate-400">{g.sportType}</span>
-                  <span className="mx-2 text-slate-600">·</span>
-                  <span className="font-label text-slate-500">{g.city}</span>
-                  {loc ? (
-                    <p className="mt-1 text-xs text-slate-500">
-                      Location:{' '}
-                      {isMapUrl(loc) ? (
-                        <a href={loc} target="_blank" rel="noreferrer" className="text-admin-cyan hover:underline">
-                          Open map
-                        </a>
-                      ) : (
-                        loc
-                      )}
-                    </p>
-                  ) : null}
-                  <p className="mt-1 text-xs text-slate-500">
-                    Owner: {g.ownerName} ({g.ownerPhone})
-                  </p>
-                  {g.lengthFeet || g.areaSqFt ? (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {g.lengthFeet ? `${g.lengthFeet} ft length` : null}
-                      {g.lengthFeet && g.areaSqFt ? ' · ' : null}
-                      {g.areaSqFt ? `${g.areaSqFt.toLocaleString()} sq ft` : null}
-                      {images.length ? ` · ${images.length} photos` : null}
-                    </p>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-          {!list.length ? (
-            <li className="px-6 py-12 text-center font-label text-sm text-slate-500">No grounds yet.</li>
-          ) : null}
-        </ul>
-      </AdminCard>
+      <div className="space-y-4">
+        <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">All grounds</h2>
+        {!list.length ? (
+          <AdminCard accent="none" className="border border-white/[0.06] p-12 text-center">
+            <p className="font-label text-sm text-slate-500">No grounds yet.</p>
+          </AdminCard>
+        ) : (
+          <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {list.map((g) => {
+              const images = groundImageList(g);
+              const loc = groundLocationLabel(g);
+              return (
+                <li key={g._id}>
+                  <AdminCard accent="cyan" className="overflow-hidden">
+                    {images.length ? (
+                      <div className="flex gap-1 border-b border-white/5 p-2">
+                        {images.slice(0, 3).map((path, i) => (
+                          <img
+                            key={`${path}-${i}`}
+                            src={publicAssetUrl(path)}
+                            alt=""
+                            className="h-16 flex-1 min-w-0 rounded-md object-cover"
+                          />
+                        ))}
+                        {images.length > 3 ? (
+                          <span className="flex h-16 w-10 shrink-0 items-center justify-center rounded-md bg-admin-surface-low text-[10px] text-slate-400">
+                            +{images.length - 3}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="h-16 border-b border-white/5 bg-admin-surface-low" />
+                    )}
+                    <div className="space-y-3 p-4 text-sm">
+                      <div>
+                        <h3 className="font-headline text-base font-bold uppercase tracking-wide text-white">
+                          {g.name}
+                        </h3>
+                        <p className="mt-1 font-label text-[10px] uppercase tracking-wider text-admin-cyan">
+                          {g.sportType}
+                          {g.city ? ` · ${g.city}` : ''}
+                        </p>
+                      </div>
+                      {loc ? (
+                        <div>
+                          <p className={fieldLabelClass}>Location</p>
+                          <p className="text-xs text-slate-300">
+                            {isMapUrl(loc) ? (
+                              <a href={loc} target="_blank" rel="noreferrer" className="text-admin-cyan hover:underline">
+                                Open map
+                              </a>
+                            ) : (
+                              loc
+                            )}
+                          </p>
+                        </div>
+                      ) : null}
+                      <div>
+                        <p className={fieldLabelClass}>Owner</p>
+                        <p className="text-xs text-slate-300">
+                          {g.ownerName} · {g.ownerPhone}
+                        </p>
+                      </div>
+                      {g.lengthFeet || g.areaSqFt ? (
+                        <div>
+                          <p className={fieldLabelClass}>Dimensions</p>
+                          <p className="text-xs text-slate-300">
+                            {g.lengthFeet ? `${g.lengthFeet} ft length` : null}
+                            {g.lengthFeet && g.areaSqFt ? ' · ' : null}
+                            {g.areaSqFt ? `${g.areaSqFt.toLocaleString()} sq ft` : null}
+                            {images.length ? ` · ${images.length} photos` : null}
+                          </p>
+                        </div>
+                      ) : null}
+                      <div>
+                        <p className={fieldLabelClass}>Hours</p>
+                        <p className="text-xs text-slate-300">
+                          {g.openTime || '—'} – {g.closeTime || '—'} · {g.slotDurationMinutes ?? 60} min slots
+                        </p>
+                      </div>
+                    </div>
+                  </AdminCard>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

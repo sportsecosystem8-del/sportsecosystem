@@ -8,6 +8,8 @@
     "dev": "node --watch server.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:demo-users": "node scripts/seedDemoUsers.js",
+    "seed:pending-verification": "node scripts/seedPendingVerification.js",
+    "seed:coach-students": "node scripts/seedCoachStudentRoster.js",
     "seed:admin:reset": "node scripts/seedAdmin.js --reset-password",
     "wipe:database": "node scripts/wipeDatabase.js",
     "wipe:db": "node scripts/wipeDatabase.js",

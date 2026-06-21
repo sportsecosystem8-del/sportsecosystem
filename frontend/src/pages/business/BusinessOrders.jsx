@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import ProductImage from '../../components/ProductImage';
+import { formatProductPrice } from '../../utils/productCurrency';
 import { api, getErrorMessage } from '../../services/api';
 
 function formatLabel(value) {
@@ -7,6 +8,13 @@ function formatLabel(value) {
   return String(value)
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function paymentMethodLabel(method) {
+  if (method === 'cod') return 'Cash on delivery';
+  if (method === 'stripe') return 'Card (Stripe)';
+  if (method === 'mock') return 'Mock payment';
+  return '—';
 }
 
 function formatDate(value) {
@@ -145,7 +153,11 @@ export default function BusinessOrders() {
                   Order #{o._id.slice(-6).toUpperCase()}
                 </p>
                 <p className="mt-1 font-medium text-white">
-                  <span className="capitalize">{o.status}</span> — total {o.totalAmount}
+                  <span className="capitalize">{o.status}</span> — {formatProductPrice(o.totalAmount)}
+                </p>
+                <p className="mt-1 text-xs text-[#9bffce]">
+                  {paymentMethodLabel(o.paymentMethod)}
+                  {o.paymentMethod === 'cod' ? ' · Collect payment on delivery' : ''}
                 </p>
               </div>
               <span className="w-fit rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[10px] font-headline uppercase tracking-wider text-slate-400">

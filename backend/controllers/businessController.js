@@ -443,10 +443,16 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   const patch = {};
   if (req.body.status) patch.status = req.body.status;
   if (req.body.trackingNumber !== undefined) patch.trackingNumber = req.body.trackingNumber;
-  const o = await Order.findOneAndUpdate({ _id: req.params.id, businessOwner: req.user.id }, patch, {
-    new: true,
-  });
+  const o = await Order.findOne({ _id: req.params.id, businessOwner: req.user.id });
   if (!o) return res.status(404).json({ success: false, message: 'Not found' });
+  if (patch.status) o.status = patch.status;
+  if (patch.trackingNumber !== undefined) o.trackingNumber = patch.trackingNumber;
+  await o.save();
+
+  if (req.body.status === 'completed' && o.paymentMethod === 'cod' && o.payment) {
+    await Payment.findByIdAndUpdate(o.payment, { status: 'completed' });
+  }
+
   const msg =
     patch.trackingNumber != null
       ? `Order ${o.status}. Tracking: ${patch.trackingNumber}`

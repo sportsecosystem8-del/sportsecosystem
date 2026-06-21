@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ThemedDateTimePicker from '../../components/coach/ThemedDateTimePicker';
-import { coachBtnPrimary, coachField, coachLabel, coachSelect } from '../../components/coach/coachClassNames';
+import CoachStudentPicker from '../../components/coach/CoachStudentPicker';
+import { coachBtnPrimary, coachField, coachLabel } from '../../components/coach/coachClassNames';
 import { api, getErrorMessage } from '../../services/api';
 import { studentsFromAcceptedRequests } from '../../utils/coachStudents';
 
@@ -124,19 +125,13 @@ export default function CoachSessions() {
               <label className={coachLabel} htmlFor="session-student">
                 Student
               </label>
-              <select
+              <CoachStudentPicker
                 id="session-student"
-                className={`${coachSelect} mt-2`}
+                students={students}
                 value={playerId}
-                onChange={(e) => setPlayerId(e.target.value)}
-              >
-                {students.map((s) => (
-                  <option key={s.playerId} value={s.playerId}>
-                    {s.fullName}
-                    {s.city ? ` · ${s.city}` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setPlayerId}
+                loading={loading}
+              />
             </div>
             <div>
               <label className={coachLabel}>Date & time</label>

@@ -11,6 +11,7 @@ async function seedMinimal() {
   if (count === 0) {
     await SportCategory.insertMany([
       { name: 'Cricket', slug: 'cricket', description: 'Indoor / training cricket' },
+      { name: 'Football', slug: 'football', description: 'Football training & grounds' },
       { name: 'Badminton', slug: 'badminton', description: 'Indoor badminton' },
     ]);
     console.log('Seeded sport categories');

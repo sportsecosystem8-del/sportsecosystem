@@ -33,6 +33,12 @@ const orderSchema = new mongoose.Schema(
       enum: ['pending', 'paid', 'processing', 'shipped', 'completed', 'cancelled'],
       default: 'pending',
     },
+    /** How the player pays — COD is default for Pakistan storefront */
+    paymentMethod: {
+      type: String,
+      enum: ['cod', 'stripe', 'mock'],
+      default: 'cod',
+    },
     payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
     /** Checkout & fulfillment */
     shippingAddress: addressSchema,

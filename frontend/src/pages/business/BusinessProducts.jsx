@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getErrorMessage } from '../../services/api';
 import ProductImage from '../../components/ProductImage';
+import { formatProductPrice } from '../../utils/productCurrency';
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-[#cc97ff]/50 focus:outline-none focus:ring-1 focus:ring-[#cc97ff]/40';
@@ -278,13 +279,13 @@ export default function BusinessProducts() {
             <h3 className={formSectionTitlePurple}>2 · Pricing</h3>
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Regular price (USD) *
+                Regular price (PKR) *
               </label>
               <input
                 className={`${inputClass} max-w-xs`}
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 required
@@ -295,13 +296,13 @@ export default function BusinessProducts() {
               <p className="mt-1 text-xs text-slate-500">Leave blank if this product is not on sale.</p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Sale price (USD)</label>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Sale price (PKR)</label>
                   <input
                     className={inputClass}
                     type="number"
                     min="0"
-                    step="0.01"
-                    placeholder="9.99"
+                    step="1"
+                    placeholder="999"
                     value={salePrice}
                     onChange={(e) => setSalePrice(e.target.value)}
                   />
@@ -403,7 +404,7 @@ export default function BusinessProducts() {
                   <div className="mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-white/10 pt-4">
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-slate-500">Price</p>
-                      <span className="font-orbitron text-lg text-[#9bffce]">${p.price}</span>
+                      <span className="font-orbitron text-lg text-[#9bffce]">{formatProductPrice(p.price)}</span>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] uppercase tracking-wider text-slate-500">In stock</p>

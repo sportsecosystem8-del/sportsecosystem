@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PlayerTrainingRequestCard from '../../components/coach/PlayerTrainingRequestCard';
+import CoachSearchField from '../../components/coach/CoachSearchField';
 import { api, getErrorMessage } from '../../services/api';
+import { matchesTrainingRequestQuery } from '../../utils/coachStudents';
 import { coachAcademyLabel, coachMapUrl } from '../../utils/coachLocation';
 
 function coachLocationOrigin(coachProfile) {
@@ -13,6 +15,12 @@ export default function CoachRequests() {
   const [info, setInfo] = useState('');
   const [scheduledAtById, setScheduledAtById] = useState({});
   const [coachOrigin, setCoachOrigin] = useState('');
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(
+    () => list.filter((r) => matchesTrainingRequestQuery(r, query)),
+    [list, query],
+  );
 
   const load = () =>
     api
@@ -76,8 +84,22 @@ export default function CoachRequests() {
           {info}
         </div>
       )}
+      {list.length > 1 ? (
+        <div className="mt-6 max-w-xl space-y-2">
+          <CoachSearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Search by name, email, city, sport, or status…"
+            aria-label="Search training requests"
+          />
+          <p className="font-label text-[10px] uppercase tracking-wider text-slate-500">
+            {filtered.length} of {list.length} request{list.length === 1 ? '' : 's'}
+            {query.trim() ? ' matching' : ''}
+          </p>
+        </div>
+      ) : null}
       <ul className="mt-4 grid gap-6 xl:grid-cols-2">
-        {list.map((r) => (
+        {filtered.map((r) => (
           <PlayerTrainingRequestCard
             key={r._id}
             request={r}
@@ -88,6 +110,11 @@ export default function CoachRequests() {
             onReject={() => act(r._id, 'rejected')}
           />
         ))}
+        {!filtered.length && list.length > 0 && query.trim() ? (
+          <li className="col-span-full rounded-lg border border-dashed border-white/10 px-6 py-12 text-center text-sm text-slate-500 xl:col-span-2">
+            No requests match &ldquo;{query.trim()}&rdquo;.
+          </li>
+        ) : null}
       </ul>
     </div>
   );

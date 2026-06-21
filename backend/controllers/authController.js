@@ -69,14 +69,14 @@ const register = asyncHandler(async (req, res) => {
     if (!Array.isArray(specs) || specs.length < 1) {
       return res.status(400).json({
         success: false,
-        message: 'Coach registration requires at least one specialty (cricket or badminton).',
+        message: 'Coach registration requires at least one specialty (cricket, football, or badminton).',
       });
     }
-    const allowed = ['cricket', 'badminton'];
+    const allowed = ['cricket', 'football', 'badminton'];
     if (!specs.every((s) => allowed.includes(s))) {
       return res.status(400).json({
         success: false,
-        message: 'Specialties must be cricket and/or badminton only (SRS scope).',
+        message: 'Specialties must be cricket, football, and/or badminton.',
       });
     }
     const mapLink = String(profile?.locationMapUrl || '').trim();

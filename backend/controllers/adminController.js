@@ -10,8 +10,6 @@ const BusinessProfile = require('../models/BusinessProfile');
 const SportCategory = require('../models/SportCategory');
 const IndoorGround = require('../models/IndoorGround');
 const GroundBooking = require('../models/GroundBooking');
-const PerformanceEvaluation = require('../models/PerformanceEvaluation');
-const AttendanceRecord = require('../models/AttendanceRecord');
 const Complaint = require('../models/Complaint');
 const Payment = require('../models/Payment');
 const SystemSettings = require('../models/SystemSettings');
@@ -19,6 +17,8 @@ const VerificationDocument = require('../models/VerificationDocument');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { notifyUser } = require('../utils/notify');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
+const { isMailerConfigured } = require('../utils/mailer');
+const { isStripeEnabled } = require('../utils/stripePayments');
 
 /** Mongoose 8 requires update operators; plain `{ status }` may not persist. */
 function verificationDocStatusForAction(action) {
@@ -349,9 +349,33 @@ const monitorBookings = asyncHandler(async (req, res) => {
 });
 
 const monitorPerformance = asyncHandler(async (req, res) => {
-  const perf = await PerformanceEvaluation.find().sort({ weekStartDate: -1 }).limit(200).lean();
-  const att = await AttendanceRecord.find().sort({ createdAt: -1 }).limit(200).lean();
-  res.json({ success: true, data: { performance: perf, attendance: att } });
+  const mem = process.memoryUsage();
+  const [users, bookings, payments] = await Promise.all([
+    User.countDocuments(),
+    GroundBooking.countDocuments(),
+    Payment.countDocuments({ status: 'completed' }),
+  ]);
+  res.json({
+    success: true,
+    data: {
+      health: {
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        uptimeSec: Math.floor(process.uptime()),
+        nodeEnv: process.env.NODE_ENV || 'development',
+        nodeVersion: process.version,
+        memoryMb: {
+          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+          rss: Math.round(mem.rss / 1024 / 1024),
+        },
+      },
+      services: {
+        stripe: isStripeEnabled(),
+        mailer: isMailerConfigured(),
+      },
+      stats: { users, bookings, paymentsCompleted: payments },
+    },
+  });
 });
 
 const listComplaints = asyncHandler(async (req, res) => {

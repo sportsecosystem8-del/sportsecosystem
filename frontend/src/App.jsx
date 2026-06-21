@@ -21,13 +21,14 @@ import PlayerComplaint from './pages/player/PlayerComplaint';
 import PlayerProfile from './pages/player/PlayerProfile';
 import CoachDashboard from './pages/coach/CoachDashboard';
 import CoachRequests from './pages/coach/CoachRequests';
+import CoachStudents from './pages/coach/CoachStudents';
 import CoachSessions from './pages/coach/CoachSessions';
+import CoachAttendance from './pages/coach/CoachAttendance';
 import CoachPlans from './pages/coach/CoachPlans';
 import CoachGrounds from './pages/coach/CoachGrounds';
 import CoachPerformance from './pages/coach/CoachPerformance';
 import CoachFeedback from './pages/coach/CoachFeedback';
 import CoachSubscription from './pages/coach/CoachSubscription';
-import CoachPayments from './pages/coach/CoachPayments';
 import CoachDocuments from './pages/coach/CoachDocuments';
 import CoachNotifications from './pages/coach/CoachNotifications';
 import CoachProfile from './pages/coach/CoachProfile';
@@ -83,13 +84,14 @@ export default function App() {
           <Route path="profile" element={<CoachProfile />} />
           <Route path="subscription" element={<CoachSubscription />} />
           <Route path="requests" element={<CoachRequests />} />
+          <Route path="students" element={<CoachStudents />} />
           <Route path="sessions" element={<CoachSessions />} />
+          <Route path="attendance" element={<CoachAttendance />} />
           <Route path="plans" element={<CoachPlans />} />
           <Route path="grounds" element={<CoachGrounds />} />
           <Route path="performance" element={<CoachPerformance />} />
           <Route path="matches" element={<Navigate to="/coach" replace />} />
           <Route path="feedback" element={<CoachFeedback />} />
-          <Route path="payments" element={<CoachPayments />} />
           <Route path="documents" element={<CoachDocuments />} />
           <Route path="notifications" element={<CoachNotifications />} />
         </Route>

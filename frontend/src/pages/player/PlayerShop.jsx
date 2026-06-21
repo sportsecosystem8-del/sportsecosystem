@@ -2,11 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import { playerBtnOutlineSm, playerBtnPrimary } from '../../components/player/playerClassNames';
-import StripePaySection, { stripePublishableConfigured } from '../../components/payment/StripePaySection';
 import ProductImage from '../../components/ProductImage';
+import { formatProductPrice } from '../../utils/productCurrency';
 import { api, getErrorMessage } from '../../services/api';
 
-/** Browse, filter, cart, checkout (Stripe or mock when keys unset) */
+const SHIPPING_FIELDS = [
+  { key: 'fullName', label: 'Full name', required: true },
+  { key: 'line1', label: 'Address', required: true },
+  { key: 'city', label: 'City', required: true },
+  { key: 'phone', label: 'Phone', required: true },
+  { key: 'postalCode', label: 'Postal code', required: false },
+];
+
+/** Browse, filter, cart, cash-on-delivery checkout */
 export default function PlayerShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
@@ -23,12 +31,8 @@ export default function PlayerShop() {
     phone: '',
     postalCode: '',
   });
-  const [cardLast4, setCardLast4] = useState('4242');
   const [note, setNote] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
-  const [intentLoading, setIntentLoading] = useState(false);
-
-  const useStripeFlow = stripePublishableConfigured();
+  const [placing, setPlacing] = useState(false);
 
   const params = useMemo(() => {
     const p = {};
@@ -49,72 +53,10 @@ export default function PlayerShop() {
     load();
   }, [sport, q, category]);
 
-  useEffect(() => {
-    setClientSecret('');
-  }, [cart]);
-
   const cartItems = () =>
     Object.entries(cart)
       .filter(([, qty]) => qty > 0)
       .map(([productId, quantity]) => ({ productId, quantity }));
-
-  const prepareStripeIntent = async () => {
-    const items = cartItems();
-    if (!items.length) return;
-    setErr('');
-    setOk('');
-    setIntentLoading(true);
-    setClientSecret('');
-    try {
-      const { data } = await api.post('/players/orders/payment-intent', { items });
-      setClientSecret(data.data.clientSecret);
-    } catch (e) {
-      setErr(getErrorMessage(e));
-    } finally {
-      setIntentLoading(false);
-    }
-  };
-
-  const finalizeOrder = async (paymentIntentId) => {
-    const items = cartItems();
-    setErr('');
-    try {
-      await api.post('/players/orders', {
-        items,
-        shippingAddress: ship.line1 ? ship : undefined,
-        customerNote: note || undefined,
-        paymentIntentId,
-      });
-      setCart({});
-      setShowCheckout(false);
-      setClientSecret('');
-      setOk('Order placed successfully.');
-    } catch (e) {
-      setErr(getErrorMessage(e));
-    }
-  };
-
-  const checkoutMock = async () => {
-    const items = cartItems();
-    if (!items.length) return;
-    setErr('');
-    setOk('');
-    try {
-      await api.post('/players/orders', {
-        items,
-        shippingAddress: ship.line1 ? ship : undefined,
-        customerNote: note || undefined,
-        cardLast4: cardLast4 || 'mock',
-      });
-      setCart({});
-      setShowCheckout(false);
-      setOk('Order placed (development mock payment).');
-    } catch (e) {
-      setErr(getErrorMessage(e));
-    }
-  };
-
-  const add = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
 
   const cartLines = useMemo(() => {
     return Object.entries(cart)
@@ -124,6 +66,38 @@ export default function PlayerShop() {
         return { productId, quantity, product };
       });
   }, [cart, products]);
+
+  const cartTotal = useMemo(() => {
+    return cartLines.reduce((sum, { quantity, product }) => {
+      const unit = product?.effectivePrice ?? product?.price ?? 0;
+      return sum + unit * quantity;
+    }, 0);
+  }, [cartLines]);
+
+  const placeCodOrder = async () => {
+    const items = cartItems();
+    if (!items.length) return;
+    setErr('');
+    setOk('');
+    setPlacing(true);
+    try {
+      await api.post('/players/orders', {
+        items,
+        paymentMethod: 'cod',
+        shippingAddress: ship,
+        customerNote: note || undefined,
+      });
+      setCart({});
+      setShowCheckout(false);
+      setOk('Order placed! Pay cash when your order is delivered.');
+    } catch (e) {
+      setErr(getErrorMessage(e));
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const add = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
 
   return (
     <div>
@@ -161,26 +135,26 @@ export default function PlayerShop() {
           <PlayerCard key={p._id} className="overflow-hidden p-0">
             <ProductImage product={p} className="h-44 w-full object-cover" placeholderClassName="h-44 w-full" />
             <div className="p-4">
-            <p className="text-lg font-bold text-white">{p.name}</p>
-            <p className="text-sm text-player-on-variant">
-              {p.sportType}
-              {p.category ? ` · ${p.category}` : ''}
-            </p>
-            <p className="mt-2 font-orbitron text-lg font-bold text-player-green">
-              {p.onSale ? (
-                <>
-                  <span className="text-player-green">{p.effectivePrice ?? p.price}</span>
-                  <span className="ml-2 text-sm line-through text-slate-500">{p.price}</span>
-                  <span className="ml-2 rounded bg-amber-500/20 px-1 text-[10px] uppercase text-amber-200">Sale</span>
-                </>
-              ) : (
-                <>{p.effectivePrice ?? p.price}</>
-              )}{' '}
-              · Stock {p.stock}
-            </p>
-            <button type="button" onClick={() => add(p._id)} className={`${playerBtnOutlineSm} mt-4 w-full`}>
-              Add to cart ({cart[p._id] || 0})
-            </button>
+              <p className="text-lg font-bold text-white">{p.name}</p>
+              <p className="text-sm text-player-on-variant">
+                {p.sportType}
+                {p.category ? ` · ${p.category}` : ''}
+              </p>
+              <p className="mt-2 font-orbitron text-lg font-bold text-player-green">
+                {p.onSale ? (
+                  <>
+                    <span className="text-player-green">{formatProductPrice(p.effectivePrice ?? p.price)}</span>
+                    <span className="ml-2 text-sm line-through text-slate-500">{formatProductPrice(p.price)}</span>
+                    <span className="ml-2 rounded bg-amber-500/20 px-1 text-[10px] uppercase text-amber-200">Sale</span>
+                  </>
+                ) : (
+                  <>{formatProductPrice(p.effectivePrice ?? p.price)}</>
+                )}{' '}
+                · Stock {p.stock}
+              </p>
+              <button type="button" onClick={() => add(p._id)} className={`${playerBtnOutlineSm} mt-4 w-full`}>
+                Add to cart ({cart[p._id] || 0})
+              </button>
             </div>
           </PlayerCard>
         ))}
@@ -198,76 +172,69 @@ export default function PlayerShop() {
             <div className="space-y-2 border-b border-white/10 pb-4">
               <p className="font-headline text-xs uppercase text-slate-400">Your cart</p>
               <ul className="space-y-2">
-              {cartLines.map(({ productId, quantity, product }) => (
-                <li key={productId} className="flex items-center gap-3">
-                  <ProductImage
-                    product={product}
-                    className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                    placeholderClassName="h-12 w-12 shrink-0 rounded-lg"
-                  />
-                  <span className="min-w-0 flex-1 text-white">
-                    {product?.name || 'Product'} × {quantity}
-                  </span>
-                </li>
-              ))}
+                {cartLines.map(({ productId, quantity, product }) => (
+                  <li key={productId} className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <ProductImage
+                        product={product}
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                        placeholderClassName="h-12 w-12 shrink-0 rounded-lg"
+                      />
+                      <span className="min-w-0 flex-1 text-white">
+                        {product?.name || 'Product'} × {quantity}
+                      </span>
+                    </div>
+                    <span className="shrink-0 font-orbitron text-xs text-player-green">
+                      {formatProductPrice((product?.effectivePrice ?? product?.price ?? 0) * quantity)}
+                    </span>
+                  </li>
+                ))}
               </ul>
+              <p className="pt-2 text-right font-orbitron text-base font-bold text-white">
+                Total: {formatProductPrice(cartTotal)}
+              </p>
             </div>
-          ) : null}
-          <p className="font-headline text-xs uppercase text-slate-400">Shipping (optional)</p>
-          {['fullName', 'line1', 'city', 'phone', 'postalCode'].map((k) => (
-            <input
-              key={k}
-              className="w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-white"
-              placeholder={k}
-              value={ship[k]}
-              onChange={(e) => setShip((s) => ({ ...s, [k]: e.target.value }))}
-            />
+          ) : (
+            <p className="text-slate-400">Your cart is empty.</p>
+          )}
+
+          <p className="font-headline text-xs uppercase text-slate-400">Delivery address</p>
+          {SHIPPING_FIELDS.map(({ key, label, required }) => (
+            <div key={key}>
+              <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
+                {label}
+                {required ? ' *' : ''}
+              </label>
+              <input
+                className="w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-white"
+                placeholder={label}
+                value={ship[key]}
+                onChange={(e) => setShip((s) => ({ ...s, [key]: e.target.value }))}
+                required={required}
+              />
+            </div>
           ))}
           <textarea
             className="w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-white"
-            placeholder="Order note"
+            placeholder="Order note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
 
-          {useStripeFlow ? (
-            <div className="space-y-3 border-t border-white/10 pt-4">
-              <p className="text-xs text-slate-400">
-                Card payment is processed securely with Stripe (min. order $0.50 USD).
-              </p>
-              {!clientSecret ? (
-                <button
-                  type="button"
-                  disabled={intentLoading || !cartItems().length}
-                  onClick={prepareStripeIntent}
-                  className={playerBtnPrimary}
-                >
-                  {intentLoading ? 'Preparing…' : 'Continue to card payment'}
-                </button>
-              ) : (
-                <StripePaySection
-                  clientSecret={clientSecret}
-                  onSucceeded={finalizeOrder}
-                  onError={(m) => setErr(m)}
-                  submitLabel="Pay & place order"
-                  buttonClassName={playerBtnPrimary}
-                />
-              )}
-            </div>
-          ) : (
-            <>
-              <p className="font-headline text-xs uppercase text-slate-400">Development mock card (last 4)</p>
-              <input
-                className="w-full rounded border border-white/10 bg-black/40 px-2 py-1.5 text-white"
-                maxLength={4}
-                value={cardLast4}
-                onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              />
-              <button type="button" onClick={checkoutMock} className={playerBtnPrimary}>
-                Place order (mock)
-              </button>
-            </>
-          )}
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <p className="text-xs text-slate-400">
+              Pay with <span className="font-semibold text-white">cash on delivery (COD)</span>. The store will
+              deliver to your address — hand over {formatProductPrice(cartTotal)} when you receive the order.
+            </p>
+            <button
+              type="button"
+              disabled={placing || !cartItems().length}
+              onClick={placeCodOrder}
+              className={playerBtnPrimary}
+            >
+              {placing ? 'Placing order…' : 'Place order (Cash on Delivery)'}
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

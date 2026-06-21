@@ -15,6 +15,7 @@ const Notification = require('../models/Notification');
 const CoachFeedback = require('../models/CoachFeedback');
 const VerificationDocument = require('../models/VerificationDocument');
 const Complaint = require('../models/Complaint');
+const { evaluationAverageForTrend, evaluationSummaryScore } = require('../utils/evaluationScores');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { hasOverlap } = require('../utils/groundBookings');
 const { notifyUser } = require('../utils/notify');
@@ -50,7 +51,7 @@ const populateCoachBrief = {
 const populatePlayerBrief = {
   path: 'player',
   select: 'email',
-  populate: { path: 'playerProfile', select: 'fullName city sportPreference skillLevel' },
+  populate: { path: 'playerProfile', select: 'fullName city sportPreference skillLevel profilePhotoUrl' },
 };
 
 const RECOMMENDATION_WEIGHTS = Object.freeze({
@@ -168,9 +169,9 @@ function derivePlayerPerformanceSignal(evals, fallbackLevel) {
     };
   }
   const latest = evals[0];
-  const latestAvg = ((latest.technique || 0) + (latest.fitness || 0) + (latest.attitude || 0)) / 3;
+  const latestAvg = evaluationAverageForTrend(latest);
   const prev = evals[1];
-  const prevAvg = prev ? ((prev.technique || 0) + (prev.fitness || 0) + (prev.attitude || 0)) / 3 : latestAvg;
+  const prevAvg = prev ? evaluationAverageForTrend(prev) : latestAvg;
   const trend = clamp01((latestAvg - prevAvg + 100) / 200) * 2 - 1;
   const normalized = clamp01(latestAvg / 100);
   const level = normalized > 0.73 ? 'advanced' : normalized > 0.45 ? 'intermediate' : 'beginner';
@@ -229,6 +230,23 @@ const updateProfile = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
   const profile = await PlayerProfile.findOneAndUpdate({ user: req.user.id }, req.body, { new: true });
+  res.json({ success: true, data: profile });
+});
+
+const uploadProfilePhoto = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
+    });
+  }
+  const url = `/uploads/${req.file.filename}`;
+  const profile = await PlayerProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { profilePhotoUrl: url },
+    { new: true }
+  );
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
   res.json({ success: true, data: profile });
 });
 
@@ -690,7 +708,8 @@ const createOrderPaymentIntent = asyncHandler(async (req, res) => {
 });
 
 const createOrder = asyncHandler(async (req, res) => {
-  const { items, shippingAddress, customerNote, cardLast4, paymentIntentId } = req.body;
+  const { items, shippingAddress, customerNote, cardLast4, paymentIntentId, paymentMethod = 'cod' } =
+    req.body;
   let ctx;
   try {
     ctx = await buildProductOrderContext(items);
@@ -699,13 +718,25 @@ const createOrder = asyncHandler(async (req, res) => {
     return res.status(code).json({ success: false, message: e.message });
   }
 
+  const invoiceRef = `INV-${Date.now()}`;
   let externalRef = 'mock-gateway';
-  let meta = {
-    cardLast4: cardLast4 || 'mock',
-    invoiceRef: `INV-${Date.now()}`,
-  };
+  let meta = { invoiceRef };
+  let paymentStatus = 'completed';
+  let orderStatus = 'paid';
 
-  if (isStripeEnabled()) {
+  if (paymentMethod === 'cod') {
+    const ship = shippingAddress || {};
+    if (!ship.fullName?.trim() || !ship.line1?.trim() || !ship.city?.trim() || !ship.phone?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash on delivery requires full name, address, city, and phone.',
+      });
+    }
+    externalRef = `cod-${Date.now()}`;
+    meta = { paymentMethod: 'cod', invoiceRef };
+    paymentStatus = 'pending';
+    orderStatus = 'pending';
+  } else if (paymentMethod === 'stripe' && isStripeEnabled()) {
     if (!paymentIntentId) {
       return res.status(400).json({
         success: false,
@@ -725,10 +756,18 @@ const createOrder = asyncHandler(async (req, res) => {
     assertAmountMatches(pi, dollarsToCents(ctx.total));
     externalRef = paymentIntentId;
     meta = {
-      ...meta,
+      paymentMethod: 'stripe',
       stripePaymentIntentId: paymentIntentId,
-      invoiceRef: `INV-${Date.now()}`,
+      invoiceRef,
     };
+  } else if (paymentMethod === 'mock' && !isStripeEnabled()) {
+    meta = {
+      paymentMethod: 'mock',
+      cardLast4: cardLast4 || 'mock',
+      invoiceRef,
+    };
+  } else {
+    return res.status(400).json({ success: false, message: 'Invalid or unsupported payment method.' });
   }
 
   const payment = await Payment.create({
@@ -736,7 +775,7 @@ const createOrder = asyncHandler(async (req, res) => {
     payee: ctx.ownerId,
     type: 'product',
     amount: ctx.total,
-    status: 'completed',
+    status: paymentStatus,
     externalRef,
     meta,
   });
@@ -764,15 +803,21 @@ const createOrder = asyncHandler(async (req, res) => {
     businessOwner: ctx.ownerId,
     items: ctx.lineDocs,
     totalAmount: ctx.total,
-    status: 'paid',
+    status: orderStatus,
+    paymentMethod,
     payment: payment._id,
     shippingAddress: shippingAddress || undefined,
     customerNote: customerNote || undefined,
   });
 
+  const notifyBody =
+    paymentMethod === 'cod'
+      ? `New cash-on-delivery order — collect PKR ${ctx.total} on delivery.`
+      : `Order received — total PKR ${ctx.total}`;
+
   await notifyUser(ctx.ownerId, {
     title: 'New order',
-    body: `Order received — total ${ctx.total}`,
+    body: notifyBody,
     category: 'order',
   });
 
@@ -958,6 +1003,7 @@ const fileComplaint = asyncHandler(async (req, res) => {
 module.exports = {
   getProfile,
   updateProfile,
+  uploadProfilePhoto,
   getRecommendations,
   listCoachCertificates,
   streamCoachCertificateFile,

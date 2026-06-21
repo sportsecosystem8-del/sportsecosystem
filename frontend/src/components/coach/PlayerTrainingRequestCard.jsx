@@ -1,7 +1,8 @@
-import CoachAvatar from '../CoachAvatar';
+import PlayerAvatar from '../PlayerAvatar';
 import PlayerLocationLines from '../PlayerLocationLines';
 import ThemedDateTimePicker from './ThemedDateTimePicker';
 import { formatProfileLabel } from '../../utils/playerProfile';
+import { evalOverallScore } from '../../utils/evaluationDisplay';
 
 function requestStatusClass(status) {
   if (status === 'accepted') return 'bg-player-green/15 text-player-green';
@@ -33,17 +34,20 @@ function DetailCell({ label, value, className = '' }) {
 
 function PerformanceStrip({ performance }) {
   if (!performance) return null;
-  const avg = Math.round(
-    ((Number(performance.technique) || 0) +
-      (Number(performance.fitness) || 0) +
-      (Number(performance.attitude) || 0)) /
-      3
-  );
-  const metrics = [
-    { label: 'Technique', value: performance.technique },
-    { label: 'Fitness', value: performance.fitness },
-    { label: 'Attitude', value: performance.attitude },
-  ];
+  const overall = evalOverallScore(performance);
+  const hasSkills = Array.isArray(performance.skillScores) && performance.skillScores.length > 0;
+  const topCategories = performance.categoryAverages
+    ? Object.entries(performance.categoryAverages)
+        .filter(([name]) => name !== 'General')
+        .slice(0, 3)
+    : [];
+  const metrics = hasSkills
+    ? topCategories.map(([label, value]) => ({ label, value }))
+    : [
+        { label: 'Technique', value: performance.technique },
+        { label: 'Fitness', value: performance.fitness },
+        { label: 'Attitude', value: performance.attitude },
+      ];
 
   return (
     <div className="rounded-lg border border-[#ff7524]/20 bg-[#ff7524]/5 px-3 py-3">
@@ -64,7 +68,7 @@ function PerformanceStrip({ performance }) {
         ))}
         <div className="rounded-md bg-black/20 px-2 py-2 text-center">
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Overall</p>
-          <p className="mt-0.5 font-display text-xl text-[#ff7524]">{avg}</p>
+          <p className="mt-0.5 font-display text-xl text-[#ff7524]">{overall ?? '—'}</p>
         </div>
       </div>
     </div>
@@ -89,7 +93,7 @@ export default function PlayerTrainingRequestCard({
   return (
     <li className="midnight-asymmetric relative border-l-4 border-[#ff7524] bg-player-surface p-6 shadow-player-card">
       <div className="mb-5 flex gap-4">
-        <CoachAvatar profile={profile} name={name} size="lg" className="ring-2 ring-[#ff7524]/30" />
+        <PlayerAvatar profile={profile} name={name} size="lg" className="ring-2 ring-[#ff7524]/30" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

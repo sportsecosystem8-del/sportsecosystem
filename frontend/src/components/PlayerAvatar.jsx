@@ -1,0 +1,51 @@
+import { publicAssetUrl } from '../utils/assetUrl';
+
+const SIZE_CLASS = {
+  sm: 'h-10 w-10 text-xs',
+  md: 'h-14 w-14 text-sm',
+  lg: 'h-20 w-20 text-lg',
+  xl: 'h-28 w-28 text-2xl',
+};
+
+function initialsFromName(name) {
+  const parts = String(name || '?')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return String(name || '?').slice(0, 2).toUpperCase();
+}
+
+/** Player headshot or initials fallback — pass playerProfile or { profilePhotoUrl, fullName } */
+export default function PlayerAvatar({ profile, name, size = 'md', className = '', cacheBust }) {
+  const photoUrl = profile?.profilePhotoUrl;
+  const displayName = name || profile?.fullName || 'Player';
+  const sizeCls = SIZE_CLASS[size] || SIZE_CLASS.md;
+
+  if (photoUrl) {
+    const src = publicAssetUrl(photoUrl);
+    const bust =
+      cacheBust != null
+        ? cacheBust
+        : profile?.updatedAt
+          ? new Date(profile.updatedAt).getTime()
+          : null;
+    const imgSrc = bust ? `${src}${src.includes('?') ? '&' : '?'}v=${bust}` : src;
+    return (
+      <img
+        src={imgSrc}
+        alt=""
+        className={`shrink-0 rounded-full object-cover ${sizeCls} ${className}`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center rounded-full bg-player-green/20 font-orbitron font-bold text-player-green ${sizeCls} ${className}`}
+      aria-hidden
+    >
+      {initialsFromName(displayName)}
+    </div>
+  );
+}

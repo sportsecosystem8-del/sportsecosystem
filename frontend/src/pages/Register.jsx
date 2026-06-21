@@ -159,6 +159,7 @@ export default function Register() {
                       onChange={(e) => setSportPreference(e.target.value)}
                     >
                       <option value="cricket">Cricket</option>
+                      <option value="football">Football</option>
                       <option value="badminton">Badminton</option>
                     </select>
                   </div>
@@ -193,7 +194,7 @@ export default function Register() {
                   <label className={labelClass}>Specialties (comma)</label>
                   <input
                     className={inputClass}
-                    placeholder="cricket, badminton"
+                    placeholder="cricket, football, badminton"
                     value={specialties}
                     onChange={(e) => setSpecialties(e.target.value)}
                     required

@@ -16,7 +16,7 @@ const coachProfileSchema = new mongoose.Schema(
     /** Public coach headshot — JPG/PNG via POST /coaches/me/profile-photo */
     profilePhotoUrl: String,
     phone: String,
-    specialties: [{ type: String, enum: ['cricket', 'badminton'] }],
+    specialties: [{ type: String, enum: ['cricket', 'football', 'badminton'] }],
     academyLocation: String,
     city: String,
     bio: String,

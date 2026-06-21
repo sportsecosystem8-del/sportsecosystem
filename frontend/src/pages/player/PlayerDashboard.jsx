@@ -8,6 +8,7 @@ import CoachAvatar from '../../components/CoachAvatar';
 import CoachLocationLines from '../../components/player/CoachLocationLines';
 import { playerLocationOrigin } from '../../utils/coachLocation';
 import { api, getErrorMessage } from '../../services/api';
+import { evalOverallScore } from '../../utils/evaluationDisplay';
 
 function greetingPrefix() {
   const h = new Date().getHours();
@@ -100,14 +101,16 @@ export default function PlayerDashboard() {
 
   const perfPts = useMemo(() => {
     if (!latestPerf) return null;
-    return (Number(latestPerf.technique) + Number(latestPerf.fitness) + Number(latestPerf.attitude)) * 4.2;
+    const overall = evalOverallScore(latestPerf);
+    if (overall == null) return null;
+    return overall * 4.2;
   }, [latestPerf]);
 
   const perfDeltaPct = useMemo(() => {
     const rows = [...perfList].sort((a, b) => new Date(b.weekStartDate) - new Date(a.weekStartDate));
     if (rows.length < 2) return null;
-    const a = Number(rows[0].technique) || 0;
-    const b = Number(rows[1].technique) || 0;
+    const a = evalOverallScore(rows[0]) || 0;
+    const b = evalOverallScore(rows[1]) || 0;
     if (b === 0) return a > 0 ? 100 : null;
     return Math.round(((a - b) / b) * 100);
   }, [perfList]);
@@ -159,7 +162,12 @@ export default function PlayerDashboard() {
   const sportLabel = me?.playerProfile?.sportPreference
     ? me.playerProfile.sportPreference.charAt(0).toUpperCase() + me.playerProfile.sportPreference.slice(1)
     : 'Sport';
-  const sportIcon = me?.playerProfile?.sportPreference === 'badminton' ? 'sports_tennis' : 'sports_cricket';
+  const sportIcon =
+    me?.playerProfile?.sportPreference === 'badminton'
+      ? 'sports_tennis'
+      : me?.playerProfile?.sportPreference === 'football'
+        ? 'sports_soccer'
+        : 'sports_cricket';
   const levelLabel = me?.playerProfile?.skillLevel
     ? me.playerProfile.skillLevel.charAt(0).toUpperCase() + me.playerProfile.skillLevel.slice(1)
     : 'Level';
@@ -177,15 +185,42 @@ export default function PlayerDashboard() {
         { h: 20, label: 'SUN', active: false },
       ];
     }
-    const max = Math.max(...sorted.map((r) => Number(r.technique) || 0), 1);
+    const max = Math.max(...sorted.map((r) => evalOverallScore(r) || 0), 1);
     const lastIdx = sorted.length - 1;
     return sorted.map((r, i) => {
       const d = new Date(r.weekStartDate);
       const label = d.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 3).toUpperCase();
-      const h = Math.max(12, Math.round(((Number(r.technique) || 0) / max) * 100));
+      const h = Math.max(12, Math.round(((evalOverallScore(r) || 0) / max) * 100));
       return { h, label, active: i === lastIdx };
     });
   }, [perfList]);
+
+  const skillBreakdownRows = useMemo(() => {
+    if (!latestPerf) return [];
+    if (latestPerf.skillScores?.length && latestPerf.categoryAverages) {
+      const cats = Object.entries(latestPerf.categoryAverages).filter(([name]) => name !== 'General');
+      const rows = cats.slice(0, 3).map(([label, value]) => ({
+        label,
+        sub: 'Category average',
+        value,
+        stroke: '#00FF87',
+      }));
+      if (rows.length) {
+        rows.unshift({
+          label: 'Overall',
+          sub: sportLabel,
+          value: evalOverallScore(latestPerf),
+          stroke: '#00B4D8',
+        });
+      }
+      return rows;
+    }
+    return [
+      { label: 'Technique', sub: 'Precision & control', value: latestPerf.technique, stroke: '#00FF87' },
+      { label: 'Fitness', sub: 'Stamina & power', value: latestPerf.fitness, stroke: '#00B4D8' },
+      { label: 'Attitude', sub: 'Mindset & focus', value: latestPerf.attitude, stroke: '#A855F7' },
+    ];
+  }, [latestPerf, sportLabel]);
 
   const chartWeekLabel = latestPerf
     ? `Week of ${new Date(latestPerf.weekStartDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
@@ -232,7 +267,7 @@ export default function PlayerDashboard() {
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-xs font-headline uppercase tracking-wider text-white/70 md:justify-start">
               <Link to="/player/grounds" className="transition-colors hover:text-white">
-                Book ground
+                Browse grounds
               </Link>
               <span className="text-white/25">|</span>
               <Link to="/player/shop" className="transition-colors hover:text-white">
@@ -395,7 +430,7 @@ export default function PlayerDashboard() {
             <h2 className="font-headline text-xl font-bold uppercase tracking-wider text-white">Weekly session volume</h2>
             <span className={playerBadgeLive}>Live data</span>
           </div>
-          <p className="mb-6 text-xs font-medium text-player-on-variant">Technique scores by week (coach evaluations)</p>
+          <p className="mb-6 text-xs font-medium text-player-on-variant">Overall scores by week (coach evaluations)</p>
           <div className="flex h-64 w-full items-end gap-3 px-2">
             {weekBars.map((bar, i) => (
               <div key={i} className="group flex min-h-0 flex-1 flex-col items-center gap-2">
@@ -423,24 +458,18 @@ export default function PlayerDashboard() {
         <PlayerCard accentLeft="green" className="flex flex-col justify-between p-8">
           <h2 className="mb-6 font-headline text-xl font-bold uppercase tracking-wider text-white">Skill breakdown</h2>
           <div className="space-y-8">
-            <SkillArcRow
-              label="Technique"
-              sub="Precision & control"
-              value={latestPerf?.technique}
-              stroke="#00FF87"
-            />
-            <SkillArcRow
-              label="Fitness"
-              sub="Stamina & power"
-              value={latestPerf?.fitness}
-              stroke="#00B4D8"
-            />
-            <SkillArcRow
-              label="Attitude"
-              sub="Mindset & focus"
-              value={latestPerf?.attitude}
-              stroke="#A855F7"
-            />
+            {skillBreakdownRows.map((row) => (
+              <SkillArcRow
+                key={row.label}
+                label={row.label}
+                sub={row.sub}
+                value={row.value}
+                stroke={row.stroke}
+              />
+            ))}
+            {!skillBreakdownRows.length ? (
+              <p className="text-sm text-player-on-variant">No evaluation data yet.</p>
+            ) : null}
           </div>
           <Link
             to="/player/performance"

@@ -12,9 +12,60 @@ export function studentsFromAcceptedRequests(requests) {
     list.push({
       playerId,
       fullName: tr.player?.playerProfile?.fullName || tr.player?.email || 'Player',
+      email: tr.player?.email || '',
       sportPreference: tr.player?.playerProfile?.sportPreference || '',
       city: tr.player?.playerProfile?.city || '',
+      profilePhotoUrl: tr.player?.playerProfile?.profilePhotoUrl || '',
+      updatedAt: tr.player?.playerProfile?.updatedAt,
     });
   }
   return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
+
+export function matchesStudentQuery(student, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const hay = [student.fullName, student.email, student.city, student.sportPreference, student.skillLevel]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+/** Dropdown label — name plus city/sport/email so same-name students stay distinct. */
+export function formatStudentOptionLabel(student) {
+  const parts = [student.fullName];
+  if (student.city) parts.push(student.city);
+  if (student.sportPreference) parts.push(student.sportPreference);
+  if (student.email) parts.push(student.email);
+  return parts.join(' · ');
+}
+
+export function studentInitials(name) {
+  const parts = String(name || '?')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return String(name || '?').slice(0, 2).toUpperCase();
+}
+
+export function matchesTrainingRequestQuery(request, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const p = request.player?.playerProfile;
+  const hay = [
+    p?.fullName,
+    request.player?.email,
+    p?.city,
+    p?.phone,
+    p?.sportPreference,
+    p?.skillLevel,
+    request.status,
+    request.message,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return hay.includes(q);
 }
