@@ -122,6 +122,19 @@ export default function PlayerDashboard() {
     return Math.round((done / total) * 100);
   }, [sessionList]);
 
+  const attendanceAlert = useMemo(() => {
+    return (notifList || []).find((n) => n.category === 'attendance' && !n.read) || null;
+  }, [notifList]);
+
+  const monthlyAbsentCount = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return sessionList.filter((s) => {
+      const at = new Date(s.scheduledAt);
+      return s.status === 'completed' && at >= start && s.attendance?.present === false;
+    }).length;
+  }, [sessionList]);
+
   const globalRank = useMemo(() => {
     const id = me?._id;
     if (!id) return '—';
@@ -236,6 +249,19 @@ export default function PlayerDashboard() {
       {err ? (
         <div className="midnight-asymmetric border border-red-500/35 bg-red-950/35 px-4 py-3 text-sm text-red-300 shadow-lg">
           {err}
+        </div>
+      ) : null}
+
+      {attendanceAlert ? (
+        <div className="midnight-asymmetric border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-200 shadow-lg">
+          <p className="font-headline text-xs font-bold uppercase tracking-wider text-amber-400">Attendance alert</p>
+          <p className="mt-1">{attendanceAlert.body || attendanceAlert.title}</p>
+          {monthlyAbsentCount > 0 ? (
+            <p className="mt-1 text-xs text-amber-300/80">{monthlyAbsentCount} absence(s) recorded this month.</p>
+          ) : null}
+          <Link to="/player/notifications" className="mt-2 inline-block text-xs font-bold uppercase tracking-wide text-amber-400 hover:underline">
+            View notifications
+          </Link>
         </div>
       ) : null}
 

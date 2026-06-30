@@ -80,12 +80,14 @@ export default function AdminVerifyCoaches() {
                       Specialties: {u.coachProfile.specialties.join(', ')}
                     </p>
                   ) : null}
-                  {u.coachProfile?.yearsExperience != null ? (
+                  {u.coachProfile?.yearsExperience != null && u.coachProfile.yearsExperience > 0 ? (
                     <p className="mt-1 font-label text-xs text-slate-400">
                       Experience: {u.coachProfile.yearsExperience} year
                       {u.coachProfile.yearsExperience === 1 ? '' : 's'}
                     </p>
-                  ) : null}
+                  ) : (
+                    <p className="mt-1 font-label text-xs text-slate-500">Experience: not provided in profile</p>
+                  )}
                   <p className="mt-1 font-label text-xs text-slate-400">
                     Map:{' '}
                     {u.coachProfile?.locationMapUrl ? (

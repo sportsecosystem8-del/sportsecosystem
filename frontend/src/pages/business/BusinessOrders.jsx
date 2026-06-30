@@ -77,6 +77,45 @@ function CustomerDetails({ order }) {
   );
 }
 
+function OrderItemDetails({ item }) {
+  const lineTotal = (item.unitPrice ?? 0) * (item.quantity ?? 1);
+  return (
+    <li className="flex gap-4 rounded-xl border border-white/[0.06] bg-[#0b1324]/60 p-3 sm:p-4">
+      <ProductImage
+        product={item}
+        path={item.imagePath}
+        alt={item.name}
+        className="h-20 w-20 shrink-0 rounded-lg object-cover sm:h-24 sm:w-24"
+        placeholderClassName="h-20 w-20 shrink-0 rounded-lg sm:h-24 sm:w-24"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-white">{item.name || 'Product'}</p>
+        <div className="mt-1 flex flex-wrap gap-2 text-[10px] uppercase tracking-wider text-slate-500">
+          {item.sportType ? (
+            <span className="rounded bg-white/5 px-2 py-0.5 capitalize">{item.sportType}</span>
+          ) : null}
+          {item.category ? <span className="rounded bg-white/5 px-2 py-0.5">{item.category}</span> : null}
+          <span className="rounded bg-white/5 px-2 py-0.5">Qty {item.quantity}</span>
+        </div>
+        {item.description ? (
+          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-400">{item.description}</p>
+        ) : (
+          <p className="mt-2 text-xs italic text-slate-600">No description on file.</p>
+        )}
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+          <span className="text-slate-400">
+            Unit: <span className="font-orbitron text-[#cc97ff]">{formatProductPrice(item.unitPrice)}</span>
+          </span>
+          {item.listPrice != null && item.listPrice !== item.unitPrice ? (
+            <span className="text-xs text-slate-500 line-through">{formatProductPrice(item.listPrice)}</span>
+          ) : null}
+          <span className="font-orbitron font-medium text-[#9bffce]">Line total: {formatProductPrice(lineTotal)}</span>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 /** Filters, tracking, status */
 export default function BusinessOrders() {
   const [list, setList] = useState([]);
@@ -171,21 +210,10 @@ export default function BusinessOrders() {
               <p className="mt-3 font-orbitron text-xs text-[#9bffce]">Tracking: {o.trackingNumber}</p>
             ) : null}
             {o.items?.length ? (
-              <ul className="mt-3 space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Items</p>
+              <ul className="mt-4 space-y-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Products in this order</p>
                 {o.items.map((i, idx) => (
-                  <li key={idx} className="flex items-center gap-3 text-slate-300">
-                    <ProductImage
-                      product={i}
-                      path={i.imagePath}
-                      alt={i.name}
-                      className="h-10 w-10 shrink-0 rounded object-cover"
-                      placeholderClassName="h-10 w-10 shrink-0 rounded"
-                    />
-                    <span>
-                      {i.name} × {i.quantity}
-                    </span>
-                  </li>
+                  <OrderItemDetails key={`${i.product || idx}-${idx}`} item={i} />
                 ))}
               </ul>
             ) : null}

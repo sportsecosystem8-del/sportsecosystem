@@ -15,6 +15,13 @@ const groundBookingSchema = new mongoose.Schema(
     holdExpiresAt: Date,
     payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
     amount: { type: Number, default: 0 },
+    /** Human-readable booking reference e.g. GB-XXX */
+    confirmationToken: { type: String, unique: true, sparse: true },
+    guestName: String,
+    guestPhone: String,
+    guestAddress: String,
+    guestCity: String,
+    paymentNote: String,
   },
   { timestamps: true }
 );

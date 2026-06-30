@@ -11,6 +11,9 @@
     "backend:start": "npm start --prefix backend",
     "frontend": "npm run dev --prefix frontend",
     "frontend:build": "npm run build --prefix frontend",
+    "frontend:lint": "npm run lint --prefix frontend",
+    "build": "npm run frontend:build",
+    "lint": "npm run frontend:lint",
     "test": "npm test --prefix backend"
   },
   "devDependencies": {

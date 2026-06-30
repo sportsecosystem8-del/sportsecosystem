@@ -32,6 +32,11 @@ const indoorGroundSchema = new mongoose.Schema(
     slotDurationMinutes: { type: Number, default: 60 },
     openTime: { type: String, default: '08:00' },
     closeTime: { type: String, default: '22:00' },
+    /** Hourly booking rate in PKR — used for search/filter */
+    pricePerHour: { type: Number, default: 0, min: 0 },
+    /** When listed by a business owner (optional — admin-listed grounds omit this) */
+    businessOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    listedBy: { type: String, enum: ['admin', 'business_owner'], default: 'admin' },
   },
   { timestamps: true }
 );
@@ -42,5 +47,6 @@ indoorGroundSchema.pre('validate', function syncPrimaryImage() {
 });
 
 indoorGroundSchema.index({ sportType: 1, isActive: 1 });
+indoorGroundSchema.index({ city: 1, pricePerHour: 1 });
 
 module.exports = mongoose.model('IndoorGround', indoorGroundSchema);

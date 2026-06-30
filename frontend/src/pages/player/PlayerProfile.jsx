@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import PlayerAvatar from '../../components/PlayerAvatar';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerIcon from '../../components/player/PlayerIcon';
-import { playerProfileInput, playerProfileSaveBtn } from '../../components/player/playerClassNames';
+import { playerProfileInput, playerProfileSaveBtn, playerBtnOutlineSm } from '../../components/player/playerClassNames';
+import WeeklyScheduleEditor, { normalizeSlots } from '../../components/shared/WeeklyScheduleEditor';
+import { PLAYER_CATEGORIES } from '../../utils/evaluationDisplay';
 import { api, getErrorMessage } from '../../services/api';
 
 function labelCls() {
@@ -16,8 +18,10 @@ export default function PlayerProfile() {
   const [phone, setPhone] = useState('');
   const [sportPreference, setSportPreference] = useState('cricket');
   const [skillLevel, setSkillLevel] = useState('beginner');
+  const [playerCategory, setPlayerCategory] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
+  const [trainingPreferences, setTrainingPreferences] = useState([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
@@ -38,8 +42,10 @@ export default function PlayerProfile() {
         setPhone(p.phone || '');
         setSportPreference(p.sportPreference || 'cricket');
         setSkillLevel(p.skillLevel || 'beginner');
+        setPlayerCategory(p.playerCategory || '');
         setCity(p.city || '');
         setAddress(p.address || '');
+        setTrainingPreferences(normalizeSlots(p.trainingPreferences));
       } catch (e) {
         if (!cancelled) setErr(getErrorMessage(e));
       }
@@ -55,14 +61,24 @@ export default function PlayerProfile() {
     setMsg('');
     setErr('');
     try {
-      await api.put('/players/me/profile', {
+      const payload = {
         fullName,
         phone: phone || undefined,
         sportPreference,
         skillLevel,
         city: city || undefined,
         address: address || undefined,
-      });
+        trainingPreferences,
+      };
+      if (sportPreference === 'cricket') {
+        if (!playerCategory) {
+          setErr('Select your playing category (batsman, bowler, or all-rounder).');
+          setSaving(false);
+          return;
+        }
+        payload.playerCategory = playerCategory;
+      }
+      await api.put('/players/me/profile', payload);
       setMsg('Profile saved.');
     } catch (e) {
       setErr(getErrorMessage(e));
@@ -116,7 +132,7 @@ export default function PlayerProfile() {
               My profile
             </h1>
             <p className="mt-3 max-w-xl text-base font-medium leading-relaxed text-white/85">
-              Keep your details current so coaches and bookings match your sport and location.
+              Keep your details current so coaches and bookings match your sport, schedule, and location.
             </p>
           </div>
           <div className="flex flex-col items-center gap-3 sm:items-end">
@@ -201,6 +217,30 @@ export default function PlayerProfile() {
                 <option value="advanced">Advanced</option>
               </select>
             </div>
+            {sportPreference === 'cricket' ? (
+              <div>
+                <label className={labelCls()} htmlFor="pf-category">
+                  Playing category <span className="text-red-400">*</span>
+                </label>
+                <select
+                  id="pf-category"
+                  required
+                  value={playerCategory}
+                  onChange={(e) => setPlayerCategory(e.target.value)}
+                  className={playerProfileInput}
+                >
+                  <option value="">Select category</option>
+                  {PLAYER_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-player-on-variant">
+                  Drives which techniques your coach evaluates and your weekly training plan.
+                </p>
+              </div>
+            ) : null}
           </div>
         </PlayerCard>
 
@@ -234,6 +274,24 @@ export default function PlayerProfile() {
                 className={playerProfileInput}
               />
             </div>
+          </div>
+        </PlayerCard>
+
+        <PlayerCard className="lg:col-span-2">
+          <h2 className="player-headline-section font-headline text-lg font-bold uppercase tracking-tight text-white">
+            Training schedule
+          </h2>
+          <p className="mt-1 text-xs text-player-on-variant">
+            Pick the days and times you want to train. Coach recommendations use this to match your availability.
+          </p>
+          <div className="mt-6">
+            <WeeklyScheduleEditor
+              slots={trainingPreferences}
+              onChange={setTrainingPreferences}
+              fieldClass={playerProfileInput}
+              addButtonClass={playerBtnOutlineSm}
+              emptyHint="No slots yet — add when you usually want training sessions."
+            />
           </div>
         </PlayerCard>
 

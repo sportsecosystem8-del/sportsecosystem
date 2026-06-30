@@ -68,6 +68,10 @@ async function buildProductOrderContext(items) {
       unitPrice: unit,
       quantity: qty,
       imagePath: productPrimaryImagePath(prod),
+      description: prod.description || '',
+      category: prod.category || '',
+      sportType: prod.sportType || '',
+      listPrice: prod.price,
     });
   }
 

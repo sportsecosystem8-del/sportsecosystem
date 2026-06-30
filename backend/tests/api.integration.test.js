@@ -44,6 +44,7 @@ skipNoDb('Sports Ecosystem API (integration)', () => {
         profile: {
           fullName: 'Test Player',
           sportPreference: 'cricket',
+          playerCategory: 'batsman',
           skillLevel: 'beginner',
           city: 'Lahore',
         },
@@ -64,6 +65,7 @@ skipNoDb('Sports Ecosystem API (integration)', () => {
         fullName: 'L',
         sportPreference: 'badminton',
         skillLevel: 'beginner',
+        city: 'Lahore',
       },
     });
     const res = await request(app).post('/api/auth/login').send({

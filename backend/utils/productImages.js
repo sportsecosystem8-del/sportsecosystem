@@ -12,24 +12,29 @@ async function enrichOrderItemsWithImages(orders, Product) {
   if (!orders?.length) return orders;
   const productIds = [
     ...new Set(
-      orders.flatMap((o) => (o.items || []).filter((i) => !i.imagePath && i.product).map((i) => String(i.product)))
+      orders.flatMap((o) => (o.items || []).filter((i) => i.product).map((i) => String(i.product)))
     ),
   ];
   if (!productIds.length) return orders;
 
   const products = await Product.find({ _id: { $in: productIds } })
-    .select('images primaryImageIndex')
+    .select('name description category sportType price images primaryImageIndex')
     .lean();
-  const imageByProduct = Object.fromEntries(
-    products.map((p) => [String(p._id), productPrimaryImagePath(p)])
-  );
+  const byId = Object.fromEntries(products.map((p) => [String(p._id), p]));
 
   return orders.map((o) => ({
     ...o,
-    items: (o.items || []).map((item) => ({
-      ...item,
-      imagePath: item.imagePath || imageByProduct[String(item.product)] || null,
-    })),
+    items: (o.items || []).map((item) => {
+      const prod = byId[String(item.product)];
+      return {
+        ...item,
+        imagePath: item.imagePath || productPrimaryImagePath(prod) || null,
+        description: item.description || prod?.description || '',
+        category: item.category || prod?.category || '',
+        sportType: item.sportType || prod?.sportType || '',
+        listPrice: item.listPrice ?? prod?.price ?? item.unitPrice,
+      };
+    }),
   }));
 }
 

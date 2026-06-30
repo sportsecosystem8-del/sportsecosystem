@@ -7,9 +7,16 @@ const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
 const VerificationDocument = require('../models/VerificationDocument');
 const CoachPartnershipRequest = require('../models/CoachPartnershipRequest');
+const IndoorGround = require('../models/IndoorGround');
+const GroundBooking = require('../models/GroundBooking');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { enrichOrderItemsWithImages } = require('../utils/productImages');
 const { notifyUser } = require('../utils/notify');
+const {
+  parseGroundImagePaths,
+  sanitizeGroundPayload,
+  validateGroundImages,
+} = require('../utils/groundPayload');
 const {
   getStripe,
   isStripeEnabled,
@@ -570,6 +577,78 @@ const listBusinessDocs = asyncHandler(async (req, res) => {
   res.json({ success: true, data: list });
 });
 
+const listMyGrounds = asyncHandler(async (req, res) => {
+  const list = await IndoorGround.find({ businessOwner: req.user.id }).sort({ name: 1 }).lean();
+  res.json({ success: true, data: list });
+});
+
+const createBusinessGround = asyncHandler(async (req, res) => {
+  const bp = await BusinessProfile.findOne({ user: req.user.id }).lean();
+  if (!bp) return res.status(404).json({ success: false, message: 'Business profile not found' });
+
+  const imagePaths = parseGroundImagePaths(req.body);
+  const imageErr = validateGroundImages(imagePaths);
+  if (imageErr) return res.status(400).json({ success: false, message: imageErr });
+
+  const lengthFeet = Number(req.body.lengthFeet);
+  const areaSqFt = Number(req.body.areaSqFt);
+  if (!Number.isFinite(lengthFeet) || lengthFeet < 1) {
+    return res.status(400).json({ success: false, message: 'lengthFeet must be at least 1' });
+  }
+  if (!Number.isFinite(areaSqFt) || areaSqFt < 1) {
+    return res.status(400).json({ success: false, message: 'areaSqFt must be at least 1' });
+  }
+  if (!req.body.name || !req.body.sportType) {
+    return res.status(400).json({ success: false, message: 'name and sportType are required' });
+  }
+
+  const payload = sanitizeGroundPayload({
+    ...req.body,
+    ownerName: req.body.ownerName || bp.businessName,
+    ownerPhone: req.body.ownerPhone || bp.phone || '',
+    ownerAddress: req.body.ownerAddress || bp.address,
+    ownerLocation: req.body.ownerLocation || bp.address,
+    location: req.body.location || bp.address,
+    city: req.body.city || '',
+    businessOwner: req.user.id,
+    listedBy: 'business_owner',
+    isActive: true,
+  });
+
+  const g = await IndoorGround.create(payload);
+  res.status(201).json({ success: true, data: g });
+});
+
+const updateBusinessGround = asyncHandler(async (req, res) => {
+  const existing = await IndoorGround.findOne({ _id: req.params.id, businessOwner: req.user.id });
+  if (!existing) return res.status(404).json({ success: false, message: 'Ground not found' });
+  const payload = sanitizeGroundPayload(req.body);
+  if (payload.imagePaths) {
+    const imageErr = validateGroundImages(payload.imagePaths);
+    if (imageErr) return res.status(400).json({ success: false, message: imageErr });
+  }
+  const g = await IndoorGround.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+  res.json({ success: true, data: g });
+});
+
+const deleteBusinessGround = asyncHandler(async (req, res) => {
+  const g = await IndoorGround.findOneAndDelete({ _id: req.params.id, businessOwner: req.user.id });
+  if (!g) return res.status(404).json({ success: false, message: 'Ground not found' });
+  res.json({ success: true, message: 'Ground removed' });
+});
+
+const listBusinessGroundBookings = asyncHandler(async (req, res) => {
+  const groundIds = await IndoorGround.find({ businessOwner: req.user.id }).distinct('_id');
+  const list = await GroundBooking.find({
+    ground: { $in: groundIds },
+    status: { $in: ['held', 'confirmed'] },
+  })
+    .populate('ground', 'name sportType city pricePerHour')
+    .sort({ startTime: -1 })
+    .lean();
+  res.json({ success: true, data: list });
+});
+
 module.exports = {
   getProfile,
   updateProfile,
@@ -593,4 +672,9 @@ module.exports = {
   listNotifications,
   uploadBusinessDoc,
   listBusinessDocs,
+  listMyGrounds,
+  createBusinessGround,
+  updateBusinessGround,
+  deleteBusinessGround,
+  listBusinessGroundBookings,
 };

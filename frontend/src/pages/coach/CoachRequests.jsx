@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import PlayerTrainingRequestCard from '../../components/coach/PlayerTrainingRequestCard';
 import CoachSearchField from '../../components/coach/CoachSearchField';
 import { api, getErrorMessage } from '../../services/api';
@@ -14,13 +14,13 @@ export default function CoachRequests() {
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [scheduledAtById, setScheduledAtById] = useState({});
+  const [meetingLocationById, setMeetingLocationById] = useState({});
   const [coachOrigin, setCoachOrigin] = useState('');
+  const [coachProfile, setCoachProfile] = useState(null);
   const [query, setQuery] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
-  const filtered = useMemo(
-    () => list.filter((r) => matchesTrainingRequestQuery(r, query)),
-    [list, query],
-  );
+  const filtered = list.filter((r) => matchesTrainingRequestQuery(r, query));
 
   const load = () =>
     api
@@ -32,41 +32,71 @@ export default function CoachRequests() {
     load();
     api
       .get('/coaches/me/profile')
-      .then((r) => setCoachOrigin(coachLocationOrigin(r.data?.data)))
+      .then((r) => {
+        const p = r.data?.data;
+        setCoachProfile(p);
+        setCoachOrigin(coachLocationOrigin(p));
+      })
       .catch(() => {});
   }, []);
 
   const act = async (id, status) => {
     const selected = scheduledAtById[id];
     if (status === 'accepted' && !selected) {
-      const ok = window.confirm(
-        'No schedule time selected. The request will be accepted but the player will not appear on Weekly Schedule until you accept with a date and time. Continue?',
-      );
-      if (!ok) return;
+      setErr('Select a meeting date and time before accepting.');
+      return;
     }
     const body =
-      status === 'accepted' && selected
-        ? { status, scheduledAt: new Date(selected).toISOString() }
+      status === 'accepted'
+        ? {
+            status,
+            scheduledAt: new Date(selected).toISOString(),
+            meetingLocation: meetingLocationById[id] || coachOrigin || undefined,
+            meetingAcademyName: coachProfile?.fullName || undefined,
+          }
         : { status };
+    setBusyId(id);
+    setErr('');
     try {
       const res = await api.patch(`/coaches/training-requests/${id}`, body);
-      setErr('');
-      const note = res.data?.data?.schedulingNote;
-      const session = res.data?.data?.session;
-      if (note) {
-        setInfo(note);
-      } else if (status === 'accepted' && session) {
-        setInfo('Request accepted and session scheduled. The player will appear on Weekly Schedule.');
-      } else if (status === 'accepted') {
-        setInfo('');
-      } else {
-        setInfo('');
-      }
+      const note = res.data?.data?.meetingInstructions || res.data?.data?.schedulingNote;
+      setInfo(note || (status === 'accepted' ? 'Request accepted — player notified with meeting details.' : ''));
       setScheduledAtById((prev) => ({ ...prev, [id]: '' }));
+      setMeetingLocationById((prev) => ({ ...prev, [id]: '' }));
       load();
     } catch (e) {
       setInfo('');
       setErr(getErrorMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const markFees = async (id) => {
+    setBusyId(id);
+    setErr('');
+    try {
+      await api.post(`/coaches/training-requests/${id}/mark-fees-cleared`);
+      setInfo('Fees marked cleared. You can now create the first session.');
+      load();
+    } catch (e) {
+      setErr(getErrorMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const startSession = async (id) => {
+    setBusyId(id);
+    setErr('');
+    try {
+      await api.post(`/coaches/training-requests/${id}/start-session`);
+      setInfo('First training session created — player added to Weekly Schedule.');
+      load();
+    } catch (e) {
+      setErr(getErrorMessage(e));
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -75,7 +105,9 @@ export default function CoachRequests() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-5xl tracking-[0.08em] text-white">TRAINING REQUESTS</h1>
-          <p className="font-headline text-xs uppercase tracking-[0.3em] text-slate-500">Management Dashboard</p>
+          <p className="font-headline text-xs uppercase tracking-[0.3em] text-slate-500">
+            Accept → meeting info → fees → first session
+          </p>
         </div>
       </div>
       {err && <p className="text-sm text-red-400 mt-2">{err}</p>}
@@ -92,10 +124,6 @@ export default function CoachRequests() {
             placeholder="Search by name, email, city, sport, or status…"
             aria-label="Search training requests"
           />
-          <p className="font-label text-[10px] uppercase tracking-wider text-slate-500">
-            {filtered.length} of {list.length} request{list.length === 1 ? '' : 's'}
-            {query.trim() ? ' matching' : ''}
-          </p>
         </div>
       ) : null}
       <ul className="mt-4 grid gap-6 xl:grid-cols-2">
@@ -106,15 +134,15 @@ export default function CoachRequests() {
             coachOrigin={coachOrigin}
             scheduledAt={scheduledAtById[r._id] || ''}
             onScheduledAtChange={(value) => setScheduledAtById((prev) => ({ ...prev, [r._id]: value }))}
+            meetingLocation={meetingLocationById[r._id] ?? coachOrigin}
+            onMeetingLocationChange={(value) => setMeetingLocationById((prev) => ({ ...prev, [r._id]: value }))}
             onAccept={() => act(r._id, 'accepted')}
             onReject={() => act(r._id, 'rejected')}
+            onMarkFeesCleared={markFees}
+            onStartSession={startSession}
+            busy={busyId === r._id}
           />
         ))}
-        {!filtered.length && list.length > 0 && query.trim() ? (
-          <li className="col-span-full rounded-lg border border-dashed border-white/10 px-6 py-12 text-center text-sm text-slate-500 xl:col-span-2">
-            No requests match &ldquo;{query.trim()}&rdquo;.
-          </li>
-        ) : null}
       </ul>
     </div>
   );

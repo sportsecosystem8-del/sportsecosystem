@@ -13,8 +13,10 @@ const GroundBooking = require('../models/GroundBooking');
 const Complaint = require('../models/Complaint');
 const Payment = require('../models/Payment');
 const SystemSettings = require('../models/SystemSettings');
+const { parseGroundImagePaths, sanitizeGroundPayload, validateGroundImages } = require('../utils/groundPayload');
 const VerificationDocument = require('../models/VerificationDocument');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { sendVerificationApprovedEmail } = require('../utils/verificationEmails');
 const { notifyUser } = require('../utils/notify');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
 const { isMailerConfigured } = require('../utils/mailer');
@@ -50,46 +52,6 @@ async function attachVerificationDocuments(users, roleContext) {
   for (const u of users) {
     u.verificationDocuments = map[String(u._id)] || [];
   }
-}
-
-function parseGroundImagePaths(body = {}) {
-  if (Array.isArray(body.imagePaths)) {
-    return body.imagePaths.map((p) => String(p).trim()).filter(Boolean);
-  }
-  if (body.imagePath) return [String(body.imagePath).trim()].filter(Boolean);
-  return [];
-}
-
-function sanitizeGroundPayload(body = {}) {
-  const imagePaths = parseGroundImagePaths(body);
-  const payload = {
-    name: body.name,
-    sportType: body.sportType,
-    ownerName: body.ownerName,
-    ownerPhone: body.ownerPhone,
-    ownerAddress: body.ownerAddress,
-    ownerLocation: body.ownerLocation,
-    location: body.location,
-    address: body.address,
-    city: body.city,
-    description: body.description,
-    imagePaths: imagePaths.length ? imagePaths : undefined,
-    imagePath: imagePaths[0],
-    lengthFeet: body.lengthFeet != null ? Number(body.lengthFeet) : undefined,
-    areaSqFt: body.areaSqFt != null ? Number(body.areaSqFt) : undefined,
-    isActive: body.isActive,
-    slotDurationMinutes: body.slotDurationMinutes,
-    openTime: body.openTime,
-    closeTime: body.closeTime,
-  };
-  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
-}
-
-function validateGroundImages(imagePaths) {
-  if (imagePaths.length < 3) {
-    return 'At least 3 ground images are required';
-  }
-  return null;
 }
 
 const dashboard = asyncHandler(async (req, res) => {
@@ -153,6 +115,14 @@ const patchCoachVerification = asyncHandler(async (req, res) => {
       : 'Please upload additional verification documents in the Documents section.';
   }
   await notifyUser(user._id, { title, body, category: 'verification' });
+  if (action === 'approve') {
+    const profile = await CoachProfile.findOne({ user: user._id }).lean();
+    await sendVerificationApprovedEmail({
+      email: user.email,
+      role: 'coach',
+      fullName: profile?.fullName,
+    });
+  }
   res.json({ success: true, data: user, message: 'User notified in-app.' });
 });
 
@@ -226,6 +196,14 @@ const patchBusinessVerification = asyncHandler(async (req, res) => {
       : 'Please upload additional verification documents in the Documents section.';
   }
   await notifyUser(user._id, { title, body, category: 'verification' });
+  if (action === 'approve') {
+    const profile = await BusinessProfile.findOne({ user: user._id }).lean();
+    await sendVerificationApprovedEmail({
+      email: user.email,
+      role: 'business_owner',
+      fullName: profile?.businessName,
+    });
+  }
   res.json({ success: true, data: user, message: 'User notified in-app.' });
 });
 

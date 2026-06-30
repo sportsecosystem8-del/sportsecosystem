@@ -7,7 +7,9 @@ import { useVerificationDocumentPreview } from '../../hooks/useVerificationDocum
 import { previewVerificationDocumentError } from '../../utils/verificationDocument';
 import CoachAvatar from '../../components/CoachAvatar';
 import CoachLocationLines from '../../components/player/CoachLocationLines';
+import CoachProfileDetailModal from '../../components/player/CoachProfileDetailModal';
 import { playerLocationOrigin } from '../../utils/coachLocation';
+import { playerCoachesSubtitle, sportFilterBadge } from '../../utils/sportDisplay';
 import { api, getErrorMessage } from '../../services/api';
 
 export default function PlayerCoaches() {
@@ -21,6 +23,9 @@ export default function PlayerCoaches() {
   const [certPicker, setCertPicker] = useState(null);
   const [certLoadingId, setCertLoadingId] = useState(null);
   const [playerOrigin, setPlayerOrigin] = useState('');
+  const [maxBudget, setMaxBudget] = useState('');
+  const [detailCoach, setDetailCoach] = useState(null);
+  const [playerSport, setPlayerSport] = useState('');
   const docPreview = useVerificationDocumentPreview();
 
   const openCertificate = async (coachId, doc) => {
@@ -90,6 +95,16 @@ export default function PlayerCoaches() {
     return { label: 'Request training', disabled: false, hint: null };
   }
 
+  const filteredList = useMemo(() => {
+    const cap = maxBudget !== '' ? Number(maxBudget) : null;
+    if (!Number.isFinite(cap) || cap < 0) return list;
+    return list.filter((row) => {
+      const fee = row.profile?.monthlyTrainingFee;
+      if (fee == null || fee === 0) return true;
+      return fee <= cap;
+    });
+  }, [list, maxBudget]);
+
   const loadTrainingRequests = async () => {
     const { data } = await api.get('/players/training-requests');
     setTrainingRequests(data.data || []);
@@ -106,6 +121,7 @@ export default function PlayerCoaches() {
       setGenerationMethod(rec.data.generationMethod || 'rules');
       setTrainingRequests(tr.data.data || []);
       setPlayerOrigin(playerLocationOrigin(profileRes.data?.data));
+      setPlayerSport(profileRes.data?.data?.sportPreference || '');
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -140,13 +156,32 @@ export default function PlayerCoaches() {
     <div>
       <PlayerPageHeader
         title="Coach match"
-        subtitle="Verified coaches matched to your sport, skill, and city."
+        subtitle={playerCoachesSubtitle(playerSport)}
       />
+      {sportFilterBadge(playerSport) ? (
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-player-green">
+          {sportFilterBadge(playerSport)}
+        </p>
+      ) : null}
       <p className="mb-3 text-xs uppercase tracking-[0.16em] text-player-on-variant/70">
         Source: {generationMethod === 'ai' ? 'AI Recommended' : 'Rules Fallback'}
       </p>
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
       {statusMsg ? <p className="mb-4 text-sm text-player-green">{statusMsg}</p> : null}
+      <PlayerCard className="mb-6 max-w-xl">
+        <label className={playerLabel} htmlFor="max-budget">
+          Max monthly budget (PKR)
+        </label>
+        <input
+          id="max-budget"
+          type="number"
+          min="0"
+          className={`${playerField} mt-2`}
+          placeholder="e.g. 5000 — leave empty to show all"
+          value={maxBudget}
+          onChange={(e) => setMaxBudget(e.target.value)}
+        />
+      </PlayerCard>
       <PlayerCard className="mb-6 max-w-xl">
         <label className={playerLabel}>Optional message (all requests)</label>
         <input
@@ -157,18 +192,33 @@ export default function PlayerCoaches() {
         />
       </PlayerCard>
       <ul className="space-y-4">
-        {list.map((row) => (
+        {filteredList.map((row) => (
           <PlayerCard key={row.userId} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => setDetailCoach(row)}
+              className="flex flex-1 gap-4 text-left transition hover:opacity-90"
+            >
               <CoachAvatar profile={row.profile} size="lg" />
-              <div>
+              <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="rounded-md border border-player-green/40 bg-player-green/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-player-green">
                   #{row.rank || '—'}
                 </span>
-                <p className="text-lg font-bold text-white">{row.profile?.fullName}</p>
+                <p className="text-lg font-bold text-white underline-offset-2 hover:underline">{row.profile?.fullName}</p>
               </div>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-player-green">Tap for full profile & reviews</p>
               <p className="mt-1 text-sm text-player-on-variant">{row.profile?.specialties?.join(', ') || '—'}</p>
+              {row.profile?.averageRating > 0 ? (
+                <p className="mt-1 text-xs text-amber-200">
+                  ★ {row.profile.averageRating.toFixed(1)} ({row.profile.ratingCount || 0} reviews)
+                </p>
+              ) : null}
+              {row.profile?.monthlyTrainingFee > 0 ? (
+                <p className="mt-1 text-sm font-semibold text-player-green">
+                  PKR {row.profile.monthlyTrainingFee}/month
+                </p>
+              ) : null}
               <CoachLocationLines profile={row.profile} playerOrigin={playerOrigin} className="mt-2" />
               <p className="mt-2 text-xs text-player-on-variant/70">
                 Match score: {row.matchScore?.toFixed?.(1) ?? row.matchScore}
@@ -193,8 +243,15 @@ export default function PlayerCoaches() {
                 </ul>
               ) : null}
               </div>
-            </div>
+            </button>
             <div className="flex w-full flex-col gap-2 border-t border-white/10 pt-4 sm:w-56 sm:border-0 sm:pt-0">
+              <button
+                type="button"
+                onClick={() => setDetailCoach(row)}
+                className={playerBtnOutlineSm}
+              >
+                View profile
+              </button>
               {(() => {
                 const action = coachRequestAction(row.userId);
                 return (
@@ -281,6 +338,18 @@ export default function PlayerCoaches() {
           </div>
         </div>
       ) : null}
+
+      <CoachProfileDetailModal
+        open={Boolean(detailCoach)}
+        coachId={detailCoach?.userId}
+        coachRow={detailCoach}
+        playerOrigin={playerOrigin}
+        onClose={() => setDetailCoach(null)}
+        onRequestTraining={requestTraining}
+        onViewCertificate={viewCertificate}
+        requestAction={detailCoach ? coachRequestAction(detailCoach.userId) : null}
+        requesting={requestingCoachId === detailCoach?.userId}
+      />
     </div>
   );
 }

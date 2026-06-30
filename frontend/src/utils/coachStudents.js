@@ -14,6 +14,8 @@ export function studentsFromAcceptedRequests(requests) {
       fullName: tr.player?.playerProfile?.fullName || tr.player?.email || 'Player',
       email: tr.player?.email || '',
       sportPreference: tr.player?.playerProfile?.sportPreference || '',
+      playerCategory: tr.player?.playerProfile?.playerCategory || '',
+      skillLevel: tr.player?.playerProfile?.skillLevel || '',
       city: tr.player?.playerProfile?.city || '',
       profilePhotoUrl: tr.player?.playerProfile?.profilePhotoUrl || '',
       updatedAt: tr.player?.playerProfile?.updatedAt,

@@ -7,6 +7,10 @@ const orderItemSchema = new mongoose.Schema(
     unitPrice: Number,
     quantity: { type: Number, required: true, min: 1 },
     imagePath: String,
+    description: String,
+    category: String,
+    sportType: String,
+    listPrice: Number,
   },
   { _id: false }
 );

@@ -8,6 +8,11 @@ const CoachProfile = require('../models/CoachProfile');
 const BusinessProfile = require('../models/BusinessProfile');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendMail, isMailerConfigured } = require('../utils/mailer');
+const {
+  validateScheduleSlots,
+  normalizeSkillLevels,
+  normalizeSports,
+} = require('../utils/scheduleSlots');
 
 function signToken(user) {
   return jwt.sign(
@@ -97,6 +102,16 @@ const register = asyncHandler(async (req, res) => {
     }
     profile.locationMapUrl = mapLink;
   }
+  if (role === 'player' && profile?.sportPreference === 'cricket') {
+    const cat = profile?.playerCategory;
+    const allowed = ['batsman', 'bowler', 'allrounder'];
+    if (!cat || !allowed.includes(cat)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cricket players must select a playing category (batsman, bowler, or allrounder).',
+      });
+    }
+  }
   if (role === 'business_owner' && (!profile?.businessName || String(profile.businessName).trim() === '')) {
     return res.status(400).json({ success: false, message: 'Business name is required.' });
   }
@@ -134,28 +149,44 @@ const register = asyncHandler(async (req, res) => {
   });
 
   if (role === 'player') {
+    let trainingPreferences = [];
+    if (profile.trainingPreferences !== undefined) {
+      const check = validateScheduleSlots(profile.trainingPreferences);
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+      trainingPreferences = check.slots;
+    }
     const pp = await PlayerProfile.create({
       user: user._id,
       fullName: profile.fullName,
       phone: profile.phone,
       sportPreference: profile.sportPreference,
       skillLevel: profile.skillLevel || 'beginner',
+      playerCategory:
+        profile.sportPreference === 'cricket' ? profile.playerCategory || undefined : undefined,
+      trainingPreferences,
       city: profile.city,
       address: profile.address,
     });
     user.playerProfile = pp._id;
     await user.save();
   } else if (role === 'coach') {
+    let availability = [];
+    if (profile.availability !== undefined) {
+      const check = validateScheduleSlots(profile.availability);
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+      availability = check.slots;
+    }
     const cp = await CoachProfile.create({
       user: user._id,
       fullName: profile.fullName,
       phone: profile.phone,
-      specialties: profile.specialties || [],
+      specialties: normalizeSports(profile.specialties || []),
+      preferredPlayerLevels: normalizeSkillLevels(profile.preferredPlayerLevels || []),
       academyLocation: profile.academyLocation,
       city: profile.city,
       bio: profile.bio,
       yearsExperience: profile.yearsExperience || 0,
-      availability: profile.availability || [],
+      availability,
       locationMapUrl: profile.locationMapUrl,
     });
     user.coachProfile = cp._id;

@@ -13,22 +13,32 @@ const CoachProfile = require('../models/CoachProfile');
 const DEMO_PASSWORD = 'Demo1234!';
 const MAP_URL = 'https://www.google.com/maps?q=24.8607,67.0011';
 
+const DEMO_EVENING = [
+  { dayOfWeek: 1, start: '16:00', end: '20:00' },
+  { dayOfWeek: 3, start: '16:00', end: '20:00' },
+  { dayOfWeek: 5, start: '16:00', end: '20:00' },
+];
+const DEMO_PLAYER_SLOTS = [
+  { dayOfWeek: 1, start: '17:00', end: '19:00' },
+  { dayOfWeek: 3, start: '17:00', end: '19:00' },
+];
+
 const players = [
-  { email: 'demo-player1@local.test', fullName: 'Ahmed Khan', sportPreference: 'cricket', skillLevel: 'beginner', city: 'Karachi' },
+  { email: 'demo-player1@local.test', fullName: 'Ahmed Khan', sportPreference: 'cricket', playerCategory: 'batsman', skillLevel: 'beginner', city: 'Karachi' },
   { email: 'demo-player2@local.test', fullName: 'Sara Malik', sportPreference: 'badminton', skillLevel: 'intermediate', city: 'Lahore' },
-  { email: 'demo-player3@local.test', fullName: 'Hassan Raza', sportPreference: 'cricket', skillLevel: 'advanced', city: 'Islamabad' },
+  { email: 'demo-player3@local.test', fullName: 'Hassan Raza', sportPreference: 'cricket', playerCategory: 'bowler', skillLevel: 'advanced', city: 'Islamabad' },
   { email: 'demo-player4@local.test', fullName: 'Fatima Noor', sportPreference: 'badminton', skillLevel: 'beginner', city: 'Karachi' },
-  { email: 'demo-player5@local.test', fullName: 'Omar Sheikh', sportPreference: 'cricket', skillLevel: 'intermediate', city: 'Rawalpindi' },
+  { email: 'demo-player5@local.test', fullName: 'Omar Sheikh', sportPreference: 'cricket', playerCategory: 'allrounder', skillLevel: 'intermediate', city: 'Rawalpindi' },
 ];
 
 const coaches = [
-  { email: 'demo-coach1@local.test', fullName: 'Coach Imran', specialties: ['cricket'], city: 'Karachi', yearsExperience: 8 },
-  { email: 'demo-coach2@local.test', fullName: 'Coach Ayesha', specialties: ['badminton'], city: 'Lahore', yearsExperience: 5 },
-  { email: 'demo-coach3@local.test', fullName: 'Coach Bilal', specialties: ['cricket', 'badminton'], city: 'Islamabad', yearsExperience: 12 },
-  { email: 'demo-coach4@local.test', fullName: 'Coach Nida', specialties: ['badminton'], city: 'Karachi', yearsExperience: 4 },
-  { email: 'demo-coach5@local.test', fullName: 'Coach Tariq', specialties: ['cricket'], city: 'Lahore', yearsExperience: 15 },
-  { email: 'demo-coach6@local.test', fullName: 'Coach Zainab', specialties: ['cricket'], city: 'Faisalabad', yearsExperience: 6 },
-  { email: 'demo-coach7@local.test', fullName: 'Coach Usman', specialties: ['badminton', 'cricket'], city: 'Multan', yearsExperience: 10 },
+  { email: 'demo-coach1@local.test', fullName: 'Coach Imran', specialties: ['cricket'], city: 'Karachi', yearsExperience: 8, preferredPlayerLevels: ['beginner', 'intermediate'] },
+  { email: 'demo-coach2@local.test', fullName: 'Coach Ayesha', specialties: ['badminton'], city: 'Lahore', yearsExperience: 5, preferredPlayerLevels: ['beginner', 'intermediate'] },
+  { email: 'demo-coach3@local.test', fullName: 'Coach Bilal', specialties: ['cricket', 'badminton'], city: 'Islamabad', yearsExperience: 12, preferredPlayerLevels: ['intermediate', 'advanced'] },
+  { email: 'demo-coach4@local.test', fullName: 'Coach Nida', specialties: ['badminton'], city: 'Karachi', yearsExperience: 4, preferredPlayerLevels: ['beginner'] },
+  { email: 'demo-coach5@local.test', fullName: 'Coach Tariq', specialties: ['cricket'], city: 'Lahore', yearsExperience: 15, preferredPlayerLevels: ['intermediate', 'advanced'] },
+  { email: 'demo-coach6@local.test', fullName: 'Coach Zainab', specialties: ['cricket'], city: 'Faisalabad', yearsExperience: 6, preferredPlayerLevels: ['beginner', 'intermediate'] },
+  { email: 'demo-coach7@local.test', fullName: 'Coach Usman', specialties: ['badminton', 'cricket'], city: 'Multan', yearsExperience: 10, preferredPlayerLevels: ['beginner', 'intermediate', 'advanced'] },
 ];
 
 async function ensurePlayer(row, passwordHash) {
@@ -49,7 +59,9 @@ async function ensurePlayer(row, passwordHash) {
     fullName: row.fullName,
     phone: `0300${1000000 + Math.floor(Math.random() * 8999999)}`,
     sportPreference: row.sportPreference,
+    playerCategory: row.sportPreference === 'cricket' ? row.playerCategory : undefined,
     skillLevel: row.skillLevel,
+    trainingPreferences: DEMO_PLAYER_SLOTS,
     city: row.city,
     address: `${row.city} — demo`,
   });
@@ -82,7 +94,8 @@ async function ensureCoach(row, passwordHash) {
     city: row.city,
     bio: 'Demo coach seeded for testing.',
     yearsExperience: row.yearsExperience,
-    availability: [],
+    preferredPlayerLevels: row.preferredPlayerLevels || [],
+    availability: DEMO_EVENING,
     locationMapUrl: MAP_URL,
     platformSubscriptionRenewsAt: renewDemo,
   });

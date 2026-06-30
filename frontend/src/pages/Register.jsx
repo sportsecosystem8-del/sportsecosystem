@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, getErrorMessage } from '../hooks/useAuth';
+import { PLAYER_CATEGORIES } from '../utils/evaluationDisplay';
 
 const inputClass =
   'mt-1 w-full rounded-xl border border-[#414859]/40 bg-black/35 px-3 py-2.5 text-sm text-[#dfe5fb] placeholder:text-slate-600 focus:border-[#cc97ff]/50 focus:outline-none focus:ring-1 focus:ring-[#cc97ff]/40';
@@ -23,6 +24,8 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [sportPreference, setSportPreference] = useState('cricket');
   const [skillLevel, setSkillLevel] = useState('beginner');
+  const [playerCategory, setPlayerCategory] = useState('');
+  const [yearsExperience, setYearsExperience] = useState('');
   const [city, setCity] = useState('');
   const [specialties, setSpecialties] = useState('cricket');
   const [academyLocation, setAcademyLocation] = useState('');
@@ -33,7 +36,9 @@ export default function Register() {
 
   const buildProfile = () => {
     if (role === 'player') {
-      return { fullName, phone, sportPreference, skillLevel, city };
+      const profile = { fullName, phone, sportPreference, skillLevel, city };
+      if (sportPreference === 'cricket') profile.playerCategory = playerCategory;
+      return profile;
     }
     if (role === 'coach') {
       return {
@@ -42,6 +47,7 @@ export default function Register() {
         specialties: specialties.split(',').map((s) => s.trim()).filter(Boolean),
         academyLocation,
         city,
+        yearsExperience: yearsExperience !== '' ? Number.parseInt(yearsExperience, 10) : undefined,
         locationMapUrl: locationMapUrl.trim(),
       };
     }
@@ -58,6 +64,10 @@ export default function Register() {
     e.preventDefault();
     setErr('');
     setOkMessage('');
+    if (role === 'player' && sportPreference === 'cricket' && !playerCategory) {
+      setErr('Select your playing category (batsman, bowler, or all-rounder).');
+      return;
+    }
     setBusy(true);
     try {
       const result = await register({ email, password, role, profile: buildProfile() });
@@ -172,6 +182,26 @@ export default function Register() {
                     </select>
                   </div>
                 </div>
+                {sportPreference === 'cricket' ? (
+                  <div>
+                    <label className={labelClass}>
+                      Playing category <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      className={selectClass}
+                      value={playerCategory}
+                      onChange={(e) => setPlayerCategory(e.target.value)}
+                      required
+                    >
+                      <option value="">Select category</option>
+                      {PLAYER_CATEGORIES.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <div>
                   <label className={labelClass}>City</label>
                   <input className={inputClass} value={city} onChange={(e) => setCity(e.target.value)} />
@@ -221,6 +251,17 @@ export default function Register() {
                 <div>
                   <label className={labelClass}>City</label>
                   <input className={inputClass} value={city} onChange={(e) => setCity(e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelClass}>Years of experience</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className={inputClass}
+                    value={yearsExperience}
+                    onChange={(e) => setYearsExperience(e.target.value)}
+                    placeholder="e.g. 5"
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Phone</label>

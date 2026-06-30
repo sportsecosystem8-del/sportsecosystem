@@ -15,15 +15,16 @@ export default function PlayerCard({
   neon = true,
   elevate = true,
   accentLeft = null,
-  as: Tag = 'div',
+  as = 'div',
 }) {
   const edge = accentLeft ? accentMap[accentLeft] || '' : 'border border-[#434857]/10';
   const base = `midnight-asymmetric bg-player-container p-6 shadow-lg ${edge}`;
   const motion = 'transition-[box-shadow,transform] duration-300 ease-out';
   const lift = elevate && neon ? 'hover:-translate-y-0.5' : '';
   const hover = neon ? `${lift} hover:shadow-xl hover:shadow-black/40` : '';
+  const Wrapper = as;
 
   return (
-    <Tag className={`${base} ${neon ? `${motion} ${hover}` : ''} ${className}`.trim()}>{children}</Tag>
+    <Wrapper className={`${base} ${neon ? `${motion} ${hover}` : ''} ${className}`.trim()}>{children}</Wrapper>
   );
 }

@@ -13,6 +13,7 @@ const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
 const VerificationDocument = require('../models/VerificationDocument');
 const CoachFeedback = require('../models/CoachFeedback');
+const StudentFeeRecord = require('../models/StudentFeeRecord');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { resolveUserRefId } = require('../utils/objectId');
 const { hasOverlap } = require('../utils/groundBookings');
@@ -23,6 +24,12 @@ const {
   isValidGroundBookingStripeAmount,
 } = require('../utils/groundBookingCurrency');
 const { notifyUser } = require('../utils/notify');
+const {
+  validateScheduleSlots,
+  normalizeSkillLevels,
+  normalizeSports,
+  toMinutesOfDay,
+} = require('../utils/scheduleSlots');
 const {
   getStripe,
   isStripeEnabled,
@@ -45,6 +52,7 @@ const {
   coachPlatformSubscriptionActive,
   getCoachPlatformSubscriptionPriceUsd,
 } = require('../utils/coachPlatformSubscription');
+const { formatMeetingWhen, buildMeetingInstructions } = require('../utils/trainingRequestMessages');
 
 async function verifyCoachPlatformSubscriptionPI(paymentIntentId, userId, action, amountUsd) {
   const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
@@ -89,14 +97,6 @@ async function sessionConflicts(coachId, scheduledAt, excludeSessionId = null) {
   return sessions.some((s) => Math.abs(new Date(s.scheduledAt).getTime() - t) < SESSION_GAP_MS);
 }
 
-function toMinutesOfDay(timeText) {
-  if (!timeText || typeof timeText !== 'string' || !timeText.includes(':')) return null;
-  const [h, m] = timeText.split(':').map((n) => Number.parseInt(n, 10));
-  if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
-  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-  return h * 60 + m;
-}
-
 const SESSION_DURATION_MINUTES = 60;
 
 function fitsCoachAvailability(scheduledAt, availability) {
@@ -132,7 +132,26 @@ async function assertAcceptedStudent(coachId, playerId) {
   return accepted;
 }
 
-async function scheduleTrainingSession({ coachId, playerId, scheduledAt, trainingRequestId, location }) {
+async function assertFeesCleared(coachId, playerId) {
+  const tr = await TrainingRequest.findOne({
+    coach: coachId,
+    player: playerId,
+    status: 'accepted',
+  }).lean();
+  if (!tr || tr.feesClearedAt) return;
+  const err = new Error('Clear student training fees before scheduling sessions.');
+  err.statusCode = 400;
+  throw err;
+}
+
+async function scheduleTrainingSession({
+  coachId,
+  playerId,
+  scheduledAt,
+  trainingRequestId,
+  location,
+  skipFeesCheck = false,
+}) {
   const when = new Date(scheduledAt);
   if (Number.isNaN(when.getTime())) {
     const err = new Error('Invalid schedule time.');
@@ -146,6 +165,10 @@ async function scheduleTrainingSession({ coachId, playerId, scheduledAt, trainin
   }
 
   const accepted = await assertAcceptedStudent(coachId, playerId);
+
+  if (!skipFeesCheck) {
+    await assertFeesCleared(coachId, playerId);
+  }
 
   if (await sessionConflicts(coachId, when)) {
     const err = new Error('Another session is within 90 minutes of this time.');
@@ -277,6 +300,7 @@ async function createAutoWeeklyPlanDraft(coachId, playerId, referenceDate = new 
           fullName: playerProfile?.fullName || '',
           sportPreference: sport,
           skillLevel: playerProfile?.skillLevel || '',
+          playerCategory: playerProfile?.playerCategory || '',
           city: playerProfile?.city || '',
         },
         latestEvaluation: {
@@ -373,7 +397,7 @@ const populatePlayerBrief = {
   select: 'email',
   populate: {
     path: 'playerProfile',
-    select: 'fullName phone city address sportPreference skillLevel profilePhotoUrl',
+    select: 'fullName phone city address sportPreference skillLevel playerCategory profilePhotoUrl',
   },
 };
 
@@ -517,15 +541,50 @@ const renewCoachPlatform = asyncHandler(async (req, res) => {
 const updateProfile = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
-  const allowed = ['fullName', 'phone', 'bio', 'city', 'academyLocation', 'yearsExperience', 'maxStudents'];
+  const allowed = [
+    'fullName',
+    'phone',
+    'bio',
+    'city',
+    'academyLocation',
+    'yearsExperience',
+    'maxStudents',
+    'specialties',
+    'preferredPlayerLevels',
+    'availability',
+    'monthlyTrainingFee',
+  ];
   const patch = {};
   for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+  if (req.body.specialties !== undefined) {
+    const specialties = normalizeSports(req.body.specialties);
+    if (Array.isArray(req.body.specialties) && req.body.specialties.length > 0 && specialties.length === 0) {
+      return res.status(400).json({ success: false, message: 'Choose at least one valid sport specialty.' });
+    }
+    patch.specialties = specialties;
+  }
+  if (req.body.preferredPlayerLevels !== undefined) {
+    patch.preferredPlayerLevels = normalizeSkillLevels(req.body.preferredPlayerLevels);
+  }
+  if (req.body.availability !== undefined) {
+    const check = validateScheduleSlots(req.body.availability);
+    if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+    patch.availability = check.slots;
+  }
   if (req.body.locationMapUrl !== undefined) {
     const mapLink = String(req.body.locationMapUrl || '').trim();
     if (!mapLink || !/^https?:\/\//i.test(mapLink)) {
       return res.status(400).json({ success: false, message: 'Valid Google Maps URL required.' });
     }
     patch.locationMapUrl = mapLink;
+  }
+  if (req.body.yearsExperience !== undefined) {
+    const years = Number.parseInt(req.body.yearsExperience, 10);
+    patch.yearsExperience = Number.isFinite(years) && years >= 0 ? years : 0;
+  }
+  if (req.body.monthlyTrainingFee !== undefined) {
+    const fee = Number(req.body.monthlyTrainingFee);
+    patch.monthlyTrainingFee = Number.isFinite(fee) && fee >= 0 ? fee : 0;
   }
   const profile = await CoachProfile.findOneAndUpdate({ user: req.user.id }, patch, { new: true });
   if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
@@ -550,10 +609,11 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
 });
 
 const updateAvailability = asyncHandler(async (req, res) => {
-  const { availability } = req.body;
+  const check = validateScheduleSlots(req.body.availability);
+  if (!check.ok) return res.status(400).json({ success: false, message: check.message });
   const profile = await CoachProfile.findOneAndUpdate(
     { user: req.user.id },
-    { availability: availability || [] },
+    { availability: check.slots },
     { new: true }
   );
   res.json({ success: true, data: profile });
@@ -578,11 +638,17 @@ const listTrainingRequests = asyncHandler(async (req, res) => {
     }
   }
 
+  const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
+
   const data = list.map((row) => {
     const playerId = resolveUserRefId(row.player) || '';
     const latest = latestByPlayer.get(playerId);
     return {
       ...row,
+      meetingInstructions:
+        row.status === 'accepted' ? buildMeetingInstructions(row, cp) : null,
+      feesCleared: Boolean(row.feesClearedAt),
+      sessionStarted: Boolean(row.firstSession),
       latestPerformance: latest
         ? {
             technique: latest.technique,
@@ -601,50 +667,63 @@ const listTrainingRequests = asyncHandler(async (req, res) => {
 });
 
 const updateTrainingRequest = asyncHandler(async (req, res) => {
-  const { status, scheduledAt } = req.body;
+  const { status, scheduledAt, meetingLocation, meetingAcademyName } = req.body;
   const tr = await TrainingRequest.findOne({ _id: req.params.id, coach: req.user.id });
   if (!tr) return res.status(404).json({ success: false, message: 'Request not found' });
   if (status === 'accepted') {
     if (tr.status === 'accepted') {
-      return res.json({ success: true, data: { request: tr, session: null, schedulingNote: 'Request is already accepted.' } });
+      const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
+      return res.json({
+        success: true,
+        data: {
+          request: tr,
+          session: null,
+          meetingInstructions: buildMeetingInstructions(tr, cp),
+          schedulingNote: 'Request is already accepted.',
+        },
+      });
     }
+    if (!scheduledAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select a meeting date and time when accepting the request.',
+      });
+    }
+    const when = new Date(scheduledAt);
+    if (Number.isNaN(when.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid meeting time.' });
+    }
+    if (when.getTime() < Date.now() - 60_000) {
+      return res.status(400).json({ success: false, message: 'Meeting time must be in the future.' });
+    }
+    const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
     tr.status = 'accepted';
+    tr.meetingAt = when;
+    tr.meetingLocation =
+      (meetingLocation && String(meetingLocation).trim()) || cp?.academyLocation || cp?.city || '';
+    tr.meetingAcademyName =
+      (meetingAcademyName && String(meetingAcademyName).trim()) || cp?.fullName || '';
     await tr.save();
-    let session = null;
-    let schedulingNote = null;
-    let draftDate = tr.preferredStart ? new Date(tr.preferredStart) : new Date(Date.now() + 86400000);
-    if (scheduledAt) {
-      const when = new Date(scheduledAt);
-      draftDate = when;
-      try {
-        session = await scheduleTrainingSession({
-          coachId: req.user.id,
-          playerId: tr.player,
-          scheduledAt: when,
-          trainingRequestId: tr._id,
-        });
-      } catch (e) {
-        if (e.statusCode === 409) {
-          schedulingNote = `Request approved. Session was not scheduled: ${e.message}`;
-        } else {
-          throw e;
-        }
-      }
-    } else if (!session) {
-      schedulingNote =
-        'Request approved. No session was scheduled — pick a date and time when accepting to show the player on Weekly Schedule.';
-    }
-    await createAutoWeeklyPlanDraft(req.user.id, tr.player, draftDate, { ifExists: 'skip' });
+
+    const meetingInstructions = buildMeetingInstructions(tr, cp);
     try {
       await notifyUser(tr.player, {
-        title: 'Training accepted',
-        body: 'Your coach accepted the training request.',
+        title: 'Training request accepted',
+        body: meetingInstructions,
         category: 'training',
       });
     } catch (e) {
       console.warn('[notify][training-accepted] failed:', e.message);
     }
-    return res.json({ success: true, data: { request: tr, session, schedulingNote } });
+    return res.json({
+      success: true,
+      data: {
+        request: tr,
+        session: null,
+        meetingInstructions,
+        schedulingNote: meetingInstructions,
+      },
+    });
   }
   tr.status = status;
   await tr.save();
@@ -656,6 +735,95 @@ const updateTrainingRequest = asyncHandler(async (req, res) => {
     }
   }
   res.json({ success: true, data: tr });
+});
+
+const markTrainingFeesCleared = asyncHandler(async (req, res) => {
+  const tr = await TrainingRequest.findOne({
+    _id: req.params.id,
+    coach: req.user.id,
+    status: 'accepted',
+  });
+  if (!tr) return res.status(404).json({ success: false, message: 'Accepted request not found' });
+  if (!tr.feesClearedAt) {
+    tr.feesClearedAt = new Date();
+    await tr.save();
+    await StudentFeeRecord.findOneAndUpdate(
+      { coach: req.user.id, player: tr.player },
+      { $set: { lastPaidAt: new Date() } }
+    );
+    try {
+      await notifyUser(tr.player, {
+        title: 'Training fees recorded',
+        body: 'Your coach marked your training fees as cleared. Your first session can now begin.',
+        category: 'training',
+      });
+    } catch (e) {
+      console.warn('[notify][fees-cleared] failed:', e.message);
+    }
+  }
+  res.json({ success: true, data: tr });
+});
+
+const startTrainingFromRequest = asyncHandler(async (req, res) => {
+  const tr = await TrainingRequest.findOne({
+    _id: req.params.id,
+    coach: req.user.id,
+    status: 'accepted',
+  });
+  if (!tr) return res.status(404).json({ success: false, message: 'Accepted request not found' });
+  if (!tr.feesClearedAt) {
+    return res.status(400).json({
+      success: false,
+      message: 'Mark student fees as cleared before starting the first session.',
+    });
+  }
+  if (!tr.meetingAt) {
+    return res.status(400).json({ success: false, message: 'No meeting time on this request.' });
+  }
+  if (tr.firstSession) {
+    const existing = await TrainingSession.findById(tr.firstSession).populate(populatePlayerBrief).lean();
+    return res.json({
+      success: true,
+      data: { request: tr, session: existing },
+      message: 'First session already created.',
+    });
+  }
+  let session;
+  try {
+    session = await scheduleTrainingSession({
+      coachId: req.user.id,
+      playerId: tr.player,
+      scheduledAt: tr.meetingAt,
+      trainingRequestId: tr._id,
+      location: tr.meetingLocation,
+      skipFeesCheck: true,
+    });
+  } catch (e) {
+    if (e.statusCode) {
+      return res.status(e.statusCode).json({ success: false, message: e.message });
+    }
+    throw e;
+  }
+  tr.firstSession = session._id;
+  await tr.save();
+  try {
+    await createAutoWeeklyPlanDraft(req.user.id, tr.player, tr.meetingAt, { ifExists: 'skip' });
+  } catch (e) {
+    console.warn('[plan][auto-draft-on-start] skipped:', e.message);
+  }
+  try {
+    await notifyUser(tr.player, {
+      title: 'Training session scheduled',
+      body: `Your first session is set for ${formatMeetingWhen(tr.meetingAt)}${
+        tr.meetingLocation ? ` at ${tr.meetingLocation}` : ''
+      }.`,
+      category: 'training',
+    });
+  } catch (e) {
+    console.warn('[notify][session-started] failed:', e.message);
+  }
+  const populated = await TrainingSession.findById(session._id).populate(populatePlayerBrief).lean();
+  res.status(201).json({ success: true, data: { request: tr, session: populated } });
 });
 
 const listTrainingSessions = asyncHandler(async (req, res) => {
@@ -702,6 +870,70 @@ const createTrainingSession = asyncHandler(async (req, res) => {
   }
   const populated = await TrainingSession.findById(session._id).populate(populatePlayerBrief).lean();
   res.status(201).json({ success: true, data: populated });
+});
+
+const updateTrainingSession = asyncHandler(async (req, res) => {
+  const session = await TrainingSession.findOne({ _id: req.params.id, coach: req.user.id });
+  if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+  if (session.status !== 'scheduled') {
+    return res.status(400).json({ success: false, message: 'Only scheduled sessions can be updated.' });
+  }
+
+  const patch = {};
+  let notifyPlayer = false;
+  const prevTime = new Date(session.scheduledAt).getTime();
+  const prevLocation = session.location || '';
+
+  if (req.body.scheduledAt !== undefined) {
+    const when = new Date(req.body.scheduledAt);
+    if (Number.isNaN(when.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid schedule time.' });
+    }
+    if (when.getTime() < Date.now() - 60_000) {
+      return res.status(400).json({ success: false, message: 'Schedule time must be in the future.' });
+    }
+    if (await sessionConflicts(req.user.id, when, session._id)) {
+      return res.status(409).json({ success: false, message: 'Another session is within 90 minutes of this time.' });
+    }
+    const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
+    const availabilityCheck = fitsCoachAvailability(when, cp?.availability);
+    if (!availabilityCheck.ok) {
+      return res.status(409).json({ success: false, message: availabilityCheck.message });
+    }
+    patch.scheduledAt = when;
+  }
+
+  if (req.body.location !== undefined) {
+    patch.location = req.body.location ? String(req.body.location).trim() : undefined;
+  }
+
+  if (!Object.keys(patch).length) {
+    return res.status(400).json({ success: false, message: 'No changes provided.' });
+  }
+
+  const updated = await TrainingSession.findByIdAndUpdate(session._id, patch, { new: true })
+    .populate(populatePlayerBrief)
+    .lean();
+
+  const newTime = new Date(updated.scheduledAt).getTime();
+  const newLocation = updated.location || '';
+  if (newTime !== prevTime || newLocation !== prevLocation) notifyPlayer = true;
+
+  if (notifyPlayer) {
+    try {
+      await notifyUser(session.player, {
+        title: 'Training session updated',
+        body: `Your coach updated your session to ${new Date(updated.scheduledAt).toLocaleString()}${
+          updated.location ? ` at ${updated.location}` : ''
+        }.`,
+        category: 'training',
+      });
+    } catch (e) {
+      console.warn('[notify][session-updated] failed:', e.message);
+    }
+  }
+
+  res.json({ success: true, data: updated });
 });
 
 const generateAutoTrainingPlan = asyncHandler(async (req, res) => {
@@ -913,7 +1145,8 @@ const addPerformance = asyncHandler(async (req, res) => {
 
 const getEvaluationRubricHandler = asyncHandler(async (req, res) => {
   const sport = req.query.sport || req.params.sport || 'cricket';
-  res.json({ success: true, data: getEvaluationRubric(sport) });
+  const playerCategory = req.query.playerCategory || null;
+  res.json({ success: true, data: getEvaluationRubric(sport, playerCategory) });
 });
 
 const listEvaluationRubricsHandler = asyncHandler(async (req, res) => {
@@ -1159,6 +1392,60 @@ const requestWithdrawal = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: payment });
 });
 
+const listStudentFees = asyncHandler(async (req, res) => {
+  const list = await StudentFeeRecord.find({ coach: req.user.id })
+    .populate({
+      path: 'player',
+      select: 'email',
+      populate: { path: 'playerProfile', select: 'fullName profilePhotoUrl' },
+    })
+    .sort({ joiningDate: -1 })
+    .lean();
+  res.json({ success: true, data: list });
+});
+
+const upsertStudentFee = asyncHandler(async (req, res) => {
+  const { playerId, joiningDate, monthlyFee, notes, status, studentName } = req.body;
+  if (!playerId) return res.status(400).json({ success: false, message: 'playerId is required.' });
+  await assertAcceptedStudent(req.user.id, playerId);
+
+  const player = await User.findById(playerId).populate('playerProfile').lean();
+  const name =
+    (studentName && String(studentName).trim()) ||
+    player?.playerProfile?.fullName ||
+    player?.email ||
+    'Student';
+  const fee = Number(monthlyFee);
+  if (!Number.isFinite(fee) || fee < 0) {
+    return res.status(400).json({ success: false, message: 'Valid monthly fee is required.' });
+  }
+  const join = joiningDate ? new Date(joiningDate) : new Date();
+  if (Number.isNaN(join.getTime())) {
+    return res.status(400).json({ success: false, message: 'Valid joining date is required.' });
+  }
+
+  const record = await StudentFeeRecord.findOneAndUpdate(
+    { coach: req.user.id, player: playerId },
+    {
+      coach: req.user.id,
+      player: playerId,
+      studentName: name,
+      joiningDate: join,
+      monthlyFee: fee,
+      notes: notes ? String(notes).trim() : undefined,
+      status: status === 'inactive' ? 'inactive' : 'active',
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+  res.json({ success: true, data: record });
+});
+
+const deleteStudentFee = asyncHandler(async (req, res) => {
+  const deleted = await StudentFeeRecord.findOneAndDelete({ _id: req.params.id, coach: req.user.id });
+  if (!deleted) return res.status(404).json({ success: false, message: 'Fee record not found' });
+  res.json({ success: true, message: 'Deleted' });
+});
+
 const listNotifications = asyncHandler(async (req, res) => {
   const list = await Notification.find({ user: req.user.id }).sort({ createdAt: -1 }).limit(100).lean();
   res.json({ success: true, data: list });
@@ -1302,6 +1589,7 @@ const getDashboard = asyncHandler(async (req, res) => {
       city: pp?.city || '',
       sportPreference: pp?.sportPreference || '',
       skillLevel: pp?.skillLevel || '',
+      playerCategory: pp?.playerCategory || '',
       profilePhotoUrl: pp?.profilePhotoUrl || '',
       profileUpdatedAt: pp?.updatedAt,
       acceptedAt: tr.updatedAt || tr.createdAt,
@@ -1343,8 +1631,11 @@ module.exports = {
   updateAvailability,
   listTrainingRequests,
   updateTrainingRequest,
+  markTrainingFeesCleared,
+  startTrainingFromRequest,
   listTrainingSessions,
   createTrainingSession,
+  updateTrainingSession,
   generateAutoTrainingPlan,
   createTrainingPlan,
   listTrainingPlans,
@@ -1364,6 +1655,9 @@ module.exports = {
   listFeedback,
   replyFeedback,
   listPayments,
+  listStudentFees,
+  upsertStudentFee,
+  deleteStudentFee,
   requestWithdrawal,
   listNotifications,
   uploadDocumentMeta,

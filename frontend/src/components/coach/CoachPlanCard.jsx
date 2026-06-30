@@ -1,5 +1,10 @@
+import { useEffect, useState } from 'react';
 import PlayerPlanFeedback from '../player/PlayerPlanFeedback';
+import CollapsibleSection from '../shared/CollapsibleSection';
 import { isLegacyGenericPlan, parsePlanLines, parseWeeklySchedule, planSourceLabel } from '../../utils/planDisplay';
+
+const fieldClass =
+  'w-full rounded-lg border border-player-inner/60 bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]';
 
 function SectionBlock({ title, accent, children }) {
   return (
@@ -23,11 +28,29 @@ function DayRow({ day, detail }) {
   );
 }
 
-export default function CoachPlanCard({ plan, studentName, onPublish, onRegenerate, onDelete, busyId }) {
+export default function CoachPlanCard({ plan, studentName, onPublish, onRegenerate, onDelete, onSave, busyId }) {
   const legacy = isLegacyGenericPlan(plan);
   const schedule = parseWeeklySchedule(plan.exercises);
   const goalLines = parsePlanLines(plan.goals);
   const busy = busyId === plan._id;
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(plan.title || '');
+  const [goals, setGoals] = useState(plan.goals || '');
+  const [exercises, setExercises] = useState(plan.exercises || '');
+
+  useEffect(() => {
+    if (!editing) {
+      setTitle(plan.title || '');
+      setGoals(plan.goals || '');
+      setExercises(plan.exercises || '');
+    }
+  }, [plan, editing]);
+
+  const handleSave = async () => {
+    if (!onSave) return;
+    await onSave(plan._id, { title, goals, exercises });
+    setEditing(false);
+  };
 
   return (
     <li className="midnight-asymmetric border border-player-inner/40 bg-player-container p-5 text-sm shadow-player-card">
@@ -36,7 +59,11 @@ export default function CoachPlanCard({ plan, studentName, onPublish, onRegenera
       </p>
 
       <div className="mb-2 flex items-start justify-between gap-3">
-        <h3 className="font-display text-2xl leading-tight tracking-[0.06em] text-white md:text-3xl">{plan.title}</h3>
+        {editing ? (
+          <input className={`${fieldClass} font-display text-xl`} value={title} onChange={(e) => setTitle(e.target.value)} />
+        ) : (
+          <h3 className="font-display text-2xl leading-tight tracking-[0.06em] text-white md:text-3xl">{plan.title}</h3>
+        )}
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 font-orbitron text-[10px] uppercase tracking-widest ${
             plan.status === 'draft' ? 'bg-amber-500/20 text-amber-200' : 'bg-player-green/10 text-player-green'
@@ -81,50 +108,95 @@ export default function CoachPlanCard({ plan, studentName, onPublish, onRegenera
         </div>
       ) : null}
 
-      {plan.playerInsights ? (
-        <SectionBlock title="Player feedback preview" accent="border-[#ff7524]/20 bg-[#ff7524]/5">
-          <PlayerPlanFeedback insights={plan.playerInsights} />
+      {editing ? (
+        <SectionBlock title="Edit plan content" accent="border-[#ff7524]/30 bg-[#ff7524]/5">
+          <label className="block text-xs text-slate-400">Goals (one per line)</label>
+          <textarea className={`${fieldClass} mt-1 h-28`} value={goals} onChange={(e) => setGoals(e.target.value)} />
+          <label className="mt-3 block text-xs text-slate-400">Weekly program (Monday: … per line)</label>
+          <textarea
+            className={`${fieldClass} mt-1 h-40`}
+            value={exercises}
+            onChange={(e) => setExercises(e.target.value)}
+          />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleSave}
+              className="bg-[#ff7524] px-4 py-2 font-headline text-xs uppercase tracking-wider text-black disabled:opacity-50"
+            >
+              {busy ? 'Saving…' : 'Save changes'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="border border-white/20 px-4 py-2 font-headline text-xs uppercase tracking-wider text-slate-300"
+            >
+              Cancel
+            </button>
+          </div>
         </SectionBlock>
-      ) : null}
+      ) : (
+        <>
+          {plan.playerInsights ? (
+            <div className="mt-4">
+              <CollapsibleSection
+                title="Player feedback preview"
+                defaultOpen
+                maxHeightClass="max-h-96"
+                accentClass="border-[#ff7524]/20 bg-[#ff7524]/5"
+              >
+                <PlayerPlanFeedback insights={plan.playerInsights} />
+              </CollapsibleSection>
+            </div>
+          ) : null}
 
-      {plan.analysisSummary && !legacy ? (
-        <SectionBlock title="Coach skill analysis" accent="border-player-inner/50 bg-player-bg/40">
-          <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-300">{plan.analysisSummary}</pre>
-        </SectionBlock>
-      ) : null}
+          {plan.analysisSummary && !legacy ? (
+            <div className="mt-4">
+              <CollapsibleSection title="Coach skill analysis" maxHeightClass="max-h-48">
+                <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-300">{plan.analysisSummary}</pre>
+              </CollapsibleSection>
+            </div>
+          ) : null}
 
-      {goalLines.length && !legacy ? (
-        <SectionBlock title="This week's goals" accent="border-player-inner/50 bg-player-bg/30">
-          <ul className="space-y-2">
-            {goalLines.map((line) => (
-              <li key={line} className="flex gap-2 text-xs text-slate-300">
-                <span className="text-[#ff7524]">▸</span>
-                <span>{line.replace(/^[-•]\s*/, '')}</span>
-              </li>
-            ))}
-          </ul>
-        </SectionBlock>
-      ) : null}
+          {goalLines.length && !legacy ? (
+            <div className="mt-4">
+              <CollapsibleSection title="This week's goals" maxHeightClass="max-h-40">
+                <ul className="space-y-2">
+                  {goalLines.map((line) => (
+                    <li key={line} className="flex gap-2 text-xs text-slate-300">
+                      <span className="text-[#ff7524]">▸</span>
+                      <span>{line.replace(/^[-•]\s*/, '')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CollapsibleSection>
+            </div>
+          ) : null}
 
-      {schedule.length && !legacy ? (
-        <SectionBlock title="Weekly program" accent="border-player-inner/50 bg-player-bg/30">
-          <ul>
-            {schedule.map((row, i) => (
-              <DayRow key={`${row.day}-${i}`} day={row.day} detail={row.detail} />
-            ))}
-          </ul>
-        </SectionBlock>
-      ) : null}
+          {schedule.length && !legacy ? (
+            <div className="mt-4">
+              <CollapsibleSection title="Weekly program" defaultOpen maxHeightClass="max-h-72">
+                <ul>
+                  {schedule.map((row, i) => (
+                    <DayRow key={`${row.day}-${i}`} day={row.day} detail={row.detail} />
+                  ))}
+                </ul>
+              </CollapsibleSection>
+            </div>
+          ) : null}
+        </>
+      )}
 
       {legacy ? (
         <>
-          {plan.goals ? (
+          {plan.goals && !editing ? (
             <div className="mt-3 opacity-60">
               <p className="text-[10px] uppercase text-slate-500">Old goals (placeholder)</p>
               <pre className="mt-1 whitespace-pre-wrap text-xs text-slate-400">{plan.goals}</pre>
             </div>
           ) : null}
-          {plan.exercises ? (
+          {plan.exercises && !editing ? (
             <div className="mt-3 opacity-60">
               <p className="text-[10px] uppercase text-slate-500">Old program (placeholder)</p>
               <pre className="mt-1 whitespace-pre-wrap text-xs text-slate-400">{plan.exercises}</pre>
@@ -141,18 +213,28 @@ export default function CoachPlanCard({ plan, studentName, onPublish, onRegenera
         <p className="mt-4 text-xs text-player-green">Published — visible on player Schedule + notification sent.</p>
       )}
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        {!legacy && onSave && !editing ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setEditing(true)}
+            className="flex-1 border border-[#ff7524]/50 py-2.5 font-headline text-[10px] uppercase tracking-wider text-[#ff7524] disabled:opacity-50"
+          >
+            Edit plan
+          </button>
+        ) : null}
         {plan.status === 'draft' && onPublish ? (
           <button
             type="button"
-            disabled={busy || legacy}
+            disabled={busy || legacy || editing}
             onClick={() => onPublish(plan._id)}
             className="flex-1 bg-player-green/20 py-2.5 font-display text-sm tracking-wide text-player-green disabled:cursor-not-allowed disabled:opacity-40"
           >
             {legacy ? 'Regenerate first' : `Publish to ${studentName}`}
           </button>
         ) : null}
-        {!legacy && onRegenerate && plan.status === 'draft' ? (
+        {!legacy && onRegenerate && plan.status === 'draft' && !editing ? (
           <button
             type="button"
             disabled={busy}

@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import PortalAtmosphere from '../components/PortalAtmosphere';
 import PlayerIcon from '../components/player/PlayerIcon';
 import { useAuth } from '../hooks/useAuth';
+import { playerHeaderIcons } from '../utils/sportDisplay';
 
 const NAV = [
   { to: '/player', end: true, label: 'Dashboard', icon: 'dashboard' },
@@ -116,6 +117,8 @@ export default function PlayerLayout() {
   const { user } = useAuth();
   const title = headerTitle(pathname);
   const headerAv = useMemo(() => initials(user), [user]);
+  const playerSport = user?.playerProfile?.sportPreference || '';
+  const headerIcons = useMemo(() => playerHeaderIcons(playerSport), [playerSport]);
 
   const shellAside =
     'fixed left-0 top-0 z-[60] flex h-full w-[260px] flex-col border-r border-player-green/10 bg-player-surface/95 py-8 pl-0 pr-0 pt-20 shadow-player-sidebar backdrop-blur-xl';
@@ -134,9 +137,9 @@ export default function PlayerLayout() {
             <PlayerIcon name="menu" />
           </button>
           <span className="hidden items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.2em] text-player-green lg:inline-flex">
-            <PlayerIcon name="sports_cricket" className="text-lg" />
+            <PlayerIcon name={headerIcons[0]} className="text-lg" />
             Train · Book · Compete
-            <PlayerIcon name="sports_tennis" className="text-lg" />
+            <PlayerIcon name={headerIcons[1]} className="text-lg" />
           </span>
           <span className="truncate font-headline text-xs font-bold uppercase tracking-wider text-player-green lg:hidden">
             {title}

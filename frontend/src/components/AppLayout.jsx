@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import HeaderNotificationBell from './HeaderNotificationBell';
 import PortalAtmosphere from './PortalAtmosphere';
@@ -19,12 +20,15 @@ const nav = {
     { to: '/coach/grounds', label: 'Grounds' },
     { to: '/coach/performance', label: 'Evaluations' },
     { to: '/coach/feedback', label: 'Feedback' },
+    { to: '/coach/payments', label: 'Payments' },
     { to: '/coach/notifications', label: 'Notifications' },
     { to: '/coach/documents', label: 'Documents' },
   ],
   business_owner: [
     { to: '/business', end: true, label: 'Dashboard' },
     { to: '/business/products', label: 'Products' },
+    { to: '/business/grounds', label: 'Grounds' },
+    { to: '/business/ground-bookings', label: 'Ground bookings' },
     { to: '/business/orders', label: 'Orders' },
     { to: '/business/subscription', label: 'Subscription' },
     { to: '/business/coaches', label: 'Coach partners' },
@@ -36,6 +40,7 @@ const nav = {
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const items = nav[user?.role] || [];
   const isCoach = user?.role === 'coach';
   const isBusiness = user?.role === 'business_owner';
@@ -47,9 +52,67 @@ export default function AppLayout() {
   };
 
   if (isCoach) {
+    const closeMobile = () => setMobileOpen(false);
+    const coachNavLink = (item) => (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.end}
+        onClick={closeMobile}
+        className={({ isActive }) =>
+          `flex items-center gap-4 px-6 py-4 text-sm font-headline font-bold uppercase tracking-[0.16em] transition-all ${
+            isActive
+              ? 'bg-[#FF6B00]/10 text-[#FF6B00] border-r-4 border-[#FF6B00]'
+              : 'text-slate-500 hover:bg-player-inner hover:text-slate-200'
+          }`
+        }
+      >
+        <span className="material-symbols-outlined text-xl">
+          {item.label === 'Dashboard'
+            ? 'dashboard'
+            : item.label === 'Profile'
+              ? 'account_circle'
+              : item.label === 'Subscription'
+                ? 'subscriptions'
+                : item.label === 'Requests'
+                  ? 'pending_actions'
+                  : item.label === 'My students'
+                    ? 'groups'
+                    : item.label === 'Sessions'
+                      ? 'calendar_month'
+                      : item.label === 'Attendance'
+                        ? 'fact_check'
+                        : item.label === 'Weekly plans'
+                          ? 'fitness_center'
+                          : item.label === 'Grounds'
+                            ? 'location_city'
+                            : item.label === 'Evaluations'
+                              ? 'analytics'
+                              : item.label === 'Feedback'
+                                ? 'strategy'
+                                : item.label === 'Payments'
+                                  ? 'payments'
+                                  : item.label === 'Notifications'
+                                    ? 'notifications'
+                                    : item.label === 'Documents'
+                                      ? 'folder'
+                                      : 'verified'}
+        </span>
+        <span>{item.label}</span>
+      </NavLink>
+    );
+
     return (
       <div className="player-app relative min-h-screen bg-player-bg pb-16 md:pb-0">
         <PortalAtmosphere variant="coach" />
+        {mobileOpen ? (
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 z-[55] bg-black/60 md:hidden"
+            onClick={closeMobile}
+          />
+        ) : null}
         <aside className="fixed inset-y-0 left-0 z-50 hidden h-screen w-64 flex-col border-r border-[#FF6B00]/15 bg-[#080D1A]/95 shadow-player-sidebar backdrop-blur-xl md:flex">
           <div className="shrink-0 px-6 pb-6 pt-8">
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF6B00] to-[#ff7524] shadow-[0_0_20px_rgba(255,107,0,0.3)]">
@@ -61,51 +124,7 @@ export default function AppLayout() {
             <p className="font-orbitron text-[10px] uppercase tracking-[0.2em] text-[#FF6B00]/80">Coach · Elite Performance</p>
           </div>
           <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-0 pb-2 player-scrollbar">
-            {items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex items-center gap-4 px-6 py-4 text-sm font-headline font-bold uppercase tracking-[0.16em] transition-all ${
-                    isActive
-                      ? 'bg-[#FF6B00]/10 text-[#FF6B00] border-r-4 border-[#FF6B00]'
-                      : 'text-slate-500 hover:bg-player-inner hover:text-slate-200'
-                  }`
-                }
-              >
-                <span className="material-symbols-outlined text-xl">
-                  {item.label === 'Dashboard'
-                    ? 'dashboard'
-                    : item.label === 'Profile'
-                      ? 'account_circle'
-                    : item.label === 'Subscription'
-                      ? 'subscriptions'
-                    : item.label === 'Requests'
-                      ? 'pending_actions'
-                      : item.label === 'My students'
-                        ? 'groups'
-                        : item.label === 'Sessions'
-                        ? 'calendar_month'
-                        : item.label === 'Attendance'
-                          ? 'fact_check'
-                          : item.label === 'Weekly plans'
-                          ? 'fitness_center'
-                          : item.label === 'Grounds'
-                            ? 'location_city'
-                          : item.label === 'Evaluations'
-                            ? 'analytics'
-                            : item.label === 'Feedback'
-                              ? 'strategy'
-                              : item.label === 'Notifications'
-                                ? 'notifications'
-                                : item.label === 'Documents'
-                                  ? 'folder'
-                                  : 'verified'}
-                </span>
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
+            {items.map(coachNavLink)}
           </nav>
           <div className="shrink-0 border-t border-white/10 p-4">
             <button
@@ -122,12 +141,45 @@ export default function AppLayout() {
           </div>
         </aside>
 
+        <aside
+          className={`fixed inset-y-0 left-0 z-[60] flex h-screen w-64 flex-col border-r border-[#FF6B00]/15 bg-[#080D1A]/95 shadow-player-sidebar backdrop-blur-xl transition-transform duration-200 md:hidden ${
+            mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="shrink-0 px-6 pb-6 pt-8">
+            <p className="font-headline text-lg font-black uppercase tracking-tight text-white">
+              Sports <span className="text-[#FF6B00]">Ecosystem</span>
+            </p>
+          </div>
+          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto player-scrollbar">{items.map(coachNavLink)}</nav>
+          <div className="shrink-0 border-t border-white/10 p-4">
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                navigate('/login');
+                closeMobile();
+              }}
+              className="flex w-full items-center justify-center gap-2 bg-[#FF6B00] py-3 font-display text-lg tracking-[0.18em] text-black"
+            >
+              LOG OUT
+            </button>
+          </div>
+        </aside>
+
         <header className="fixed left-0 right-0 top-0 z-40 h-16 border-b border-player-inner/60 bg-[#080D1A]/85 px-4 backdrop-blur-xl md:left-64 md:px-8">
-          <div className="flex h-full items-center justify-between">
-            <p className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.18em] text-[#FF6B00]">
-              <span className="material-symbols-outlined text-lg">sports_cricket</span>
-              Coach Command Center
-              <span className="material-symbols-outlined text-lg">fitness_center</span>
+          <div className="flex h-full items-center justify-between gap-3">
+            <button
+              type="button"
+              className="rounded p-2 text-slate-400 hover:bg-white/5 hover:text-white md:hidden"
+              aria-label="Open menu"
+              onClick={() => setMobileOpen(true)}
+            >
+              <span className="material-symbols-outlined text-2xl">menu</span>
+            </button>
+            <p className="flex min-w-0 flex-1 items-center gap-2 font-headline text-xs font-bold uppercase tracking-[0.14em] text-[#FF6B00] sm:text-sm sm:tracking-[0.18em]">
+              <span className="material-symbols-outlined hidden text-lg sm:inline">sports_cricket</span>
+              <span className="truncate">Coach Command Center</span>
             </p>
             <div className="flex items-center gap-4">
               <HeaderNotificationBell to="/coach/notifications" listPath="/coaches/notifications" />
@@ -149,9 +201,13 @@ export default function AppLayout() {
   }
 
   if (isBusiness) {
+    const closeMobile = () => setMobileOpen(false);
     return (
       <div className="business-app relative min-h-screen">
         <PortalAtmosphere variant="business" />
+        {mobileOpen ? (
+          <button type="button" aria-label="Close menu" className="fixed inset-0 z-[55] bg-black/60 md:hidden" onClick={closeMobile} />
+        ) : null}
         <aside className="fixed inset-y-0 left-0 z-50 hidden w-[260px] flex-col border-r border-[#A855F7]/15 bg-[#0b1324]/95 shadow-[4px_0_24px_rgba(0,0,0,0.5)] backdrop-blur-xl md:flex">
           <div className="px-6 py-8">
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#cc97ff] to-[#9c48ea] shadow-[0_0_20px_rgba(168,85,247,0.35)]">
@@ -181,7 +237,11 @@ export default function AppLayout() {
                     ? 'dashboard'
                     : item.label === 'Products'
                       ? 'inventory_2'
-                      : item.label === 'Orders'
+                      : item.label === 'Grounds'
+                        ? 'stadium'
+                        : item.label === 'Ground bookings'
+                          ? 'event_available'
+                          : item.label === 'Orders'
                         ? 'payments'
                         : item.label === 'Subscription'
                           ? 'subscriptions'
@@ -208,9 +268,42 @@ export default function AppLayout() {
             </button>
           </div>
         </aside>
+        <aside
+          className={`fixed inset-y-0 left-0 z-[60] flex w-[260px] flex-col border-r border-[#A855F7]/15 bg-[#0b1324]/95 backdrop-blur-xl transition-transform duration-200 md:hidden ${
+            mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto business-scrollbar px-1 pt-6">
+            {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={closeMobile}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-5 py-3.5 font-headline text-sm font-semibold uppercase tracking-wide transition-all ${
+                    isActive
+                      ? 'border-l-4 border-[#A855F7] bg-[#11192c] text-[#cc97ff]'
+                      : 'text-slate-400 hover:bg-[#1c253b] hover:text-white'
+                  }`
+                }
+              >
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
         <header className="fixed left-0 right-0 top-0 z-40 h-16 border-b border-white/[0.06] bg-[#070e1d]/85 px-4 backdrop-blur-xl md:left-[260px] md:px-8">
           <div className="flex h-full items-center justify-between gap-4">
-            <p className="flex items-center gap-2 font-headline text-sm font-bold uppercase tracking-[0.16em] text-[#cc97ff]">
+            <button
+              type="button"
+              className="rounded p-2 text-slate-400 hover:text-white md:hidden"
+              aria-label="Open menu"
+              onClick={() => setMobileOpen(true)}
+            >
+              <span className="material-symbols-outlined text-2xl">menu</span>
+            </button>
+            <p className="flex min-w-0 flex-1 items-center gap-2 font-headline text-xs font-bold uppercase tracking-[0.14em] text-[#cc97ff] sm:text-sm">
               <span className="material-symbols-outlined text-lg">shopping_bag</span>
               Sports Commerce Hub
             </p>

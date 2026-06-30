@@ -51,5 +51,10 @@ r.post('/coaches/:coachId/partnership', [body('message').notEmpty()], b.sendPart
 r.get('/notifications', b.listNotifications);
 r.post('/documents', upload.single('file'), b.uploadBusinessDoc);
 r.get('/documents', b.listBusinessDocs);
+r.get('/grounds', b.listMyGrounds);
+r.post('/grounds', b.createBusinessGround);
+r.put('/grounds/:id', b.updateBusinessGround);
+r.delete('/grounds/:id', b.deleteBusinessGround);
+r.get('/ground-bookings', b.listBusinessGroundBookings);
 
 module.exports = r;

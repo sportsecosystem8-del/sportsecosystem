@@ -42,6 +42,7 @@ export default function AdminGrounds() {
   const [slotDurationMinutes, setSlotDurationMinutes] = useState('60');
   const [lengthFeet, setLengthFeet] = useState('');
   const [areaSqFt, setAreaSqFt] = useState('');
+  const [pricePerHour, setPricePerHour] = useState('');
   const [imagePaths, setImagePaths] = useState([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [err, setErr] = useState('');
@@ -95,6 +96,7 @@ export default function AdminGrounds() {
     setOwnerLocation('');
     setLengthFeet('');
     setAreaSqFt('');
+    setPricePerHour('');
     setImagePaths([]);
   };
 
@@ -120,6 +122,7 @@ export default function AdminGrounds() {
         slotDurationMinutes: Number(slotDurationMinutes) || 60,
         lengthFeet: Number(lengthFeet),
         areaSqFt: Number(areaSqFt),
+        pricePerHour: Number(pricePerHour) || 0,
         imagePaths,
         isActive: true,
       });
@@ -312,6 +315,18 @@ export default function AdminGrounds() {
                   value={areaSqFt}
                   onChange={(e) => setAreaSqFt(e.target.value)}
                   required
+                />
+              </div>
+              <div>
+                <FieldLabel>Price per hour (PKR)</FieldLabel>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className={adminField}
+                  placeholder="e.g. 2500"
+                  value={pricePerHour}
+                  onChange={(e) => setPricePerHour(e.target.value)}
                 />
               </div>
             </div>

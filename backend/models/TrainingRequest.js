@@ -11,6 +11,12 @@ const trainingRequestSchema = new mongoose.Schema(
       enum: ['pending', 'accepted', 'rejected'],
       default: 'pending',
     },
+    /** Coach-proposed first meeting — shown to player after accept; session created after fees cleared */
+    meetingAt: Date,
+    meetingLocation: String,
+    meetingAcademyName: String,
+    feesClearedAt: Date,
+    firstSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TrainingSession' },
   },
   { timestamps: true }
 );

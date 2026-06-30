@@ -32,7 +32,7 @@ function MetaLine({ icon, children }) {
   );
 }
 
-export default function PlayerSessionCard({ session, playerOrigin, compact = false }) {
+export default function PlayerSessionCard({ session, playerOrigin, compact = false, showAttendance = false }) {
   const coachProfile = session.coach?.coachProfile;
   const coachName = coachProfile?.fullName || session.coach?.email || 'Coach';
   const window = sessionWindow(session.scheduledAt);
@@ -45,6 +45,9 @@ export default function PlayerSessionCard({ session, playerOrigin, compact = fal
   const { start, end } = window;
   const dateLine = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   const sport = coachProfile?.specialties?.[0];
+  const att = session.attendance;
+  const attLabel =
+    att?.present === true ? 'Present' : att?.present === false ? 'Absent' : session.status === 'completed' ? 'Pending' : null;
 
   return (
     <li
@@ -70,6 +73,19 @@ export default function PlayerSessionCard({ session, playerOrigin, compact = fal
             ) : null}
           </div>
           <span className={`${statusBadge(session.status)} shrink-0`}>{session.status}</span>
+          {showAttendance && attLabel ? (
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                att?.present === true
+                  ? 'bg-player-green/15 text-player-green'
+                  : att?.present === false
+                    ? 'bg-red-500/15 text-red-300'
+                    : 'bg-white/10 text-slate-400'
+              }`}
+            >
+              {attLabel}
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-2 flex flex-col gap-1">

@@ -14,7 +14,7 @@ export default function Login() {
   const [email, setEmail] = useState(location.state?.emailPrefill || '');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
-  const [notice, setNotice] = useState(location.state?.message || '');
+  const [notice] = useState(location.state?.message || '');
   const [busy, setBusy] = useState(false);
 
   const goHome = (role) => {

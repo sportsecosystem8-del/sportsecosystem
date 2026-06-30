@@ -208,6 +208,21 @@ export default function CoachPlans() {
     }
   };
 
+  const savePlan = async (id, patch) => {
+    setBusyPlanId(id);
+    setErr('');
+    try {
+      await api.put(`/coaches/training-plans/${id}`, { ...patch, coachReviewed: true });
+      setOk('Plan updated.');
+      loadPlans();
+    } catch (er) {
+      setErr(getErrorMessage(er));
+      throw er;
+    } finally {
+      setBusyPlanId(null);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -320,6 +335,7 @@ export default function CoachPlans() {
             onPublish={publish}
             onRegenerate={regeneratePlan}
             onDelete={deleteDraft}
+            onSave={savePlan}
             busyId={busyPlanId}
           />
         ))}

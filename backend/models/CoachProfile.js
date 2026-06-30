@@ -1,13 +1,5 @@
 const mongoose = require('mongoose');
-
-const availabilitySlotSchema = new mongoose.Schema(
-  {
-    dayOfWeek: { type: Number, min: 0, max: 6 },
-    start: String,
-    end: String,
-  },
-  { _id: false }
-);
+const scheduleSlotSchema = require('./schemas/scheduleSlotSchema');
 
 const coachProfileSchema = new mongoose.Schema(
   {
@@ -17,11 +9,13 @@ const coachProfileSchema = new mongoose.Schema(
     profilePhotoUrl: String,
     phone: String,
     specialties: [{ type: String, enum: ['cricket', 'football', 'badminton'] }],
+    /** Player skill levels this coach prefers to train */
+    preferredPlayerLevels: [{ type: String, enum: ['beginner', 'intermediate', 'advanced'] }],
     academyLocation: String,
     city: String,
     bio: String,
     yearsExperience: { type: Number, default: 0 },
-    availability: [availabilitySlotSchema],
+    availability: [scheduleSlotSchema],
     averageRating: { type: Number, default: 0 },
     ratingCount: { type: Number, default: 0 },
     bankAccountLabel: String,
@@ -31,6 +25,8 @@ const coachProfileSchema = new mongoose.Schema(
     maxStudents: { type: Number, default: 40, min: 1 },
     /** Monthly platform access — admin-priced via SystemSettings `coach_platform_subscription_usd` */
     platformSubscriptionRenewsAt: Date,
+    /** Monthly training fee charged to players (PKR) — shown on coach profile & recommendations */
+    monthlyTrainingFee: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

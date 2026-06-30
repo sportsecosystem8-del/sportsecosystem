@@ -156,11 +156,35 @@ const EVALUATION_RUBRICS = {
 
 const SUPPORTED_SPORTS = Object.keys(EVALUATION_RUBRICS);
 
-function getEvaluationRubric(sport) {
+/** Cricket role → rubric category names included in evaluation & plans */
+const CRICKET_CATEGORIES_BY_ROLE = {
+  batsman: ['Batting', 'Fielding', 'General'],
+  bowler: ['Bowling (pace)', 'Bowling (spin)', 'Fielding', 'General'],
+  allrounder: ['Batting', 'Bowling (pace)', 'Bowling (spin)', 'Fielding', 'General'],
+};
+
+const PLAYER_CATEGORIES = ['batsman', 'bowler', 'allrounder'];
+
+function filterRubricCategories(rubric, playerCategory) {
+  if (!rubric || !playerCategory) return rubric;
+  const sport = String(rubric.sport || '').toLowerCase();
+  if (sport !== 'cricket') return rubric;
+  const allowed = CRICKET_CATEGORIES_BY_ROLE[playerCategory];
+  if (!allowed) return rubric;
+  const allowSet = new Set(allowed);
+  return {
+    ...rubric,
+    playerCategory,
+    categories: (rubric.categories || []).filter((c) => allowSet.has(c.name)),
+  };
+}
+
+function getEvaluationRubric(sport, playerCategory = null) {
   const key = String(sport || '')
     .trim()
     .toLowerCase();
-  return EVALUATION_RUBRICS[key] || EVALUATION_RUBRICS.cricket;
+  const base = EVALUATION_RUBRICS[key] || EVALUATION_RUBRICS.cricket;
+  return filterRubricCategories(base, playerCategory);
 }
 
 function listEvaluationRubrics() {
@@ -170,6 +194,9 @@ function listEvaluationRubrics() {
 module.exports = {
   EVALUATION_RUBRICS,
   SUPPORTED_SPORTS,
+  PLAYER_CATEGORIES,
+  CRICKET_CATEGORIES_BY_ROLE,
   getEvaluationRubric,
   listEvaluationRubrics,
+  filterRubricCategories,
 };

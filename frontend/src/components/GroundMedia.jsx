@@ -208,6 +208,9 @@ export function GroundVenueCard({ ground, accent = 'player' }) {
             {ground.openTime || '—'} – {ground.closeTime || '—'}
             <span className="text-slate-500"> · {ground.slotDurationMinutes ?? 60}m slots</span>
           </CompactFact>
+          <CompactFact icon="payments" label="Rate" accent={accent}>
+            {ground.pricePerHour > 0 ? `PKR ${ground.pricePerHour}/hr` : 'Ask owner'}
+          </CompactFact>
           <CompactFact icon="straighten" label="Size" accent={accent}>
             {sizeLine || '—'}
           </CompactFact>

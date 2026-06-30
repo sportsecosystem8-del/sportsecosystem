@@ -15,9 +15,11 @@ const Notification = require('../models/Notification');
 const CoachFeedback = require('../models/CoachFeedback');
 const VerificationDocument = require('../models/VerificationDocument');
 const Complaint = require('../models/Complaint');
+const AttendanceRecord = require('../models/AttendanceRecord');
 const { evaluationAverageForTrend, evaluationSummaryScore } = require('../utils/evaluationScores');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { hasOverlap } = require('../utils/groundBookings');
+const { generateBookingToken } = require('../utils/groundSlots');
 const { notifyUser } = require('../utils/notify');
 const { verifiedBusinessOwnerIds } = require('../utils/verifiedSellers');
 const { effectiveProductPrice, inSaleWindow } = require('../utils/pricing');
@@ -30,6 +32,7 @@ const {
 } = require('../utils/groundBookingCurrency');
 const { enrichOrderItemsWithImages } = require('../utils/productImages');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
+const { buildMeetingInstructions } = require('../utils/trainingRequestMessages');
 const {
   getStripe,
   isStripeEnabled,
@@ -39,13 +42,20 @@ const {
   paymentIntentMethodSpec,
 } = require('../utils/stripePayments');
 const { generateCoachRecommendations } = require('../services/aiCoachEngine');
+const { evaluatePlayerAttendanceAlert } = require('../utils/attendanceAlert');
+const {
+  toMinutesOfDay,
+  validateScheduleSlots,
+  slotsToMinuteRanges,
+} = require('../utils/scheduleSlots');
 
 const populateCoachBrief = {
   path: 'coach',
   select: 'email verificationStatus',
   populate: {
     path: 'coachProfile',
-    select: 'fullName city specialties profilePhotoUrl averageRating academyLocation locationMapUrl',
+    select:
+      'fullName city specialties profilePhotoUrl averageRating academyLocation locationMapUrl monthlyTrainingFee',
   },
 };
 const populatePlayerBrief = {
@@ -73,12 +83,8 @@ function parseOptionalLimit(rawLimit) {
   return Math.max(3, Math.min(5, n));
 }
 
-function toMinutesOfDay(timeText) {
-  if (!timeText || typeof timeText !== 'string' || !timeText.includes(':')) return null;
-  const [h, m] = timeText.split(':').map((n) => Number.parseInt(n, 10));
-  if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
-  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-  return h * 60 + m;
+function toMinutesOfDayLocal(timeText) {
+  return toMinutesOfDay(timeText);
 }
 
 function derivePlayerTimePreferences(sessions) {
@@ -102,27 +108,33 @@ function derivePlayerTimePreferences(sessions) {
     });
 }
 
+function resolvePlayerTimeSlots(playerProfile, sessions) {
+  const fromProfile = slotsToMinuteRanges(playerProfile?.trainingPreferences);
+  if (fromProfile.length > 0) return fromProfile;
+  return derivePlayerTimePreferences(sessions);
+}
+
 function scoreTimeOverlap(playerSlots, coachAvailability) {
   if (!Array.isArray(coachAvailability) || coachAvailability.length === 0) {
-    return { score: 0.4, detail: 'Coach availability not set yet.' };
+    return { score: 0.1, detail: 'Coach availability not set yet.' };
   }
   if (!Array.isArray(playerSlots) || playerSlots.length === 0) {
-    return { score: 0.5, detail: 'Using neutral time score (not enough player slot history).' };
+    return { score: 0.1, detail: 'Player training schedule not set yet.' };
   }
 
   let overlaps = 0;
   playerSlots.forEach((slot) => {
     const found = coachAvailability.some((a) => {
       if (a?.dayOfWeek !== slot.dayOfWeek) return false;
-      const start = toMinutesOfDay(a.start);
-      const end = toMinutesOfDay(a.end);
+      const start = toMinutesOfDayLocal(a.start);
+      const end = toMinutesOfDayLocal(a.end);
       if (start == null || end == null) return false;
       return start < slot.end && end > slot.start;
     });
     if (found) overlaps += 1;
   });
   const ratio = playerSlots.length ? overlaps / playerSlots.length : 0;
-  return { score: clamp01(ratio), detail: overlaps ? `${overlaps} preferred slot(s) overlap.` : 'No strong slot overlap yet.' };
+  return { score: clamp01(ratio), detail: overlaps ? `${overlaps} preferred slot(s) overlap.` : 'No schedule overlap yet.' };
 }
 
 function scoreLocation(playerCity, coachProfile) {
@@ -184,11 +196,27 @@ function scoreSkill(profile, sportPreference, playerLevel) {
   const rating = clamp01((profile?.averageRating || 0) / 5);
   const confidence = clamp01((profile?.ratingCount || 0) / 20);
   const years = clamp01((profile?.yearsExperience || 0) / 12);
-  const coachLevel = years > 0.66 ? 2 : years > 0.33 ? 1 : 0;
-  const levelGap = Math.abs(coachLevel - levelToIndex(playerLevel));
-  const levelFit = 1 - clamp01(levelGap / 2);
+
+  const preferred = Array.isArray(profile?.preferredPlayerLevels) ? profile.preferredPlayerLevels : [];
+  let levelFit;
+  let levelDetail;
+  if (preferred.length > 0) {
+    levelFit = preferred.includes(playerLevel) ? 1 : 0;
+    levelDetail = levelFit ? 'Coach trains your skill level.' : 'Coach prefers other skill levels.';
+  } else {
+    const coachLevel = years > 0.66 ? 2 : years > 0.33 ? 1 : 0;
+    const levelGap = Math.abs(coachLevel - levelToIndex(playerLevel));
+    levelFit = 1 - clamp01(levelGap / 2);
+    levelDetail = 'Skill fit estimated from coach experience (set preferred levels in profile for better matching).';
+  }
+
   const score = clamp01(0.35 * sportMatch + 0.25 * rating + 0.15 * confidence + 0.1 * years + 0.15 * levelFit);
-  return { score, detail: sportMatch ? 'Sport specialty aligned.' : 'Partial specialty alignment.' };
+  const detail = sportMatch
+    ? preferred.length
+      ? levelDetail
+      : 'Sport specialty aligned.'
+    : 'Partial specialty alignment.';
+  return { score, detail };
 }
 
 function scorePerformanceFit(playerSignal, profile) {
@@ -229,7 +257,27 @@ const getProfile = asyncHandler(async (req, res) => {
 const updateProfile = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
-  const profile = await PlayerProfile.findOneAndUpdate({ user: req.user.id }, req.body, { new: true });
+  const allowed = ['fullName', 'phone', 'sportPreference', 'skillLevel', 'city', 'address', 'playerCategory'];
+  const patch = {};
+  for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+  if (req.body.trainingPreferences !== undefined) {
+    const check = validateScheduleSlots(req.body.trainingPreferences);
+    if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+    patch.trainingPreferences = check.slots;
+  }
+  const existing = await PlayerProfile.findOne({ user: req.user.id });
+  const sport = patch.sportPreference || existing?.sportPreference || 'cricket';
+  const category = patch.playerCategory ?? existing?.playerCategory;
+  if (sport === 'cricket' && !category) {
+    return res.status(400).json({
+      success: false,
+      message: 'Playing category is required for cricket (batsman, bowler, or allrounder).',
+    });
+  }
+  if (patch.playerCategory !== undefined && sport !== 'cricket') {
+    patch.playerCategory = undefined;
+  }
+  const profile = await PlayerProfile.findOneAndUpdate({ user: req.user.id }, patch, { new: true });
   res.json({ success: true, data: profile });
 });
 
@@ -273,7 +321,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
     TrainingSession.find({ player: req.user.id }).sort({ scheduledAt: -1 }).limit(20).lean(),
   ]);
 
-  const playerTimeSlots = derivePlayerTimePreferences(recentSessions);
+  const playerTimeSlots = resolvePlayerTimeSlots(p, recentSessions);
   const playerSignal = derivePlayerPerformanceSignal(recentEvals, p.skillLevel);
 
   const scored = coaches
@@ -333,6 +381,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
           sportPreference: p.sportPreference,
           skillLevel: p.skillLevel,
           city: p.city || '',
+          trainingPreferences: p.trainingPreferences || [],
           performanceLevel: playerSignal.level,
           performanceTrend: playerSignal.trend,
         },
@@ -341,6 +390,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
           fullName: s.profile?.fullName || '',
           city: s.profile?.city || '',
           specialties: s.profile?.specialties || [],
+          preferredPlayerLevels: s.profile?.preferredPlayerLevels || [],
           yearsExperience: s.profile?.yearsExperience || 0,
           averageRating: s.profile?.averageRating || 0,
           ratingCount: s.profile?.ratingCount || 0,
@@ -450,6 +500,53 @@ const streamCoachCertificateFile = asyncHandler(async (req, res) => {
   streamVerificationDocumentFile(doc, res);
 });
 
+const COACH_PUBLIC_PROFILE_SELECT =
+  'fullName profilePhotoUrl phone specialties preferredPlayerLevels academyLocation city bio yearsExperience availability averageRating ratingCount locationMapUrl monthlyTrainingFee updatedAt';
+
+const getCoachPublicProfile = asyncHandler(async (req, res) => {
+  const coach = await findVerifiedCoachForPlayer(req.params.coachId);
+  if (!coach) return res.status(404).json({ success: false, message: 'Coach not found' });
+  const profile = await CoachProfile.findOne({ user: coach._id }).select(COACH_PUBLIC_PROFILE_SELECT).lean();
+  if (!profile) return res.status(404).json({ success: false, message: 'Coach profile not found' });
+  res.json({
+    success: true,
+    data: {
+      coachId: coach._id,
+      email: coach.email,
+      profile,
+    },
+  });
+});
+
+const listCoachPublicFeedback = asyncHandler(async (req, res) => {
+  const coach = await findVerifiedCoachForPlayer(req.params.coachId);
+  if (!coach) return res.status(404).json({ success: false, message: 'Coach not found' });
+
+  const list = await CoachFeedback.find({ coach: coach._id })
+    .populate({
+      path: 'player',
+      select: 'email',
+      populate: { path: 'playerProfile', select: 'fullName profilePhotoUrl' },
+    })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  const data = list.map((row) => ({
+    _id: row._id,
+    rating: row.rating,
+    comment: row.comment || '',
+    coachReply: row.coachReply || '',
+    createdAt: row.createdAt,
+    reviewerName: row.anonymous
+      ? 'Anonymous player'
+      : row.player?.playerProfile?.fullName || row.player?.email || 'Player',
+    reviewerPhoto: row.anonymous ? null : row.player?.playerProfile?.profilePhotoUrl || null,
+  }));
+
+  res.json({ success: true, data });
+});
+
 const createTrainingRequest = asyncHandler(async (req, res) => {
   const { coachId, message, preferredStart } = req.body;
   const coach = await User.findOne({ _id: coachId, role: 'coach', verificationStatus: 'verified' });
@@ -485,7 +582,17 @@ const listMyTrainingRequests = asyncHandler(async (req, res) => {
     .populate(populateCoachBrief)
     .sort({ createdAt: -1 })
     .lean();
-  res.json({ success: true, data: list });
+  const data = list.map((row) => {
+    const cp = row.coach?.coachProfile;
+    return {
+      ...row,
+      meetingInstructions:
+        row.status === 'accepted' ? buildMeetingInstructions(row, cp) : null,
+      feesCleared: Boolean(row.feesClearedAt),
+      sessionStarted: Boolean(row.firstSession),
+    };
+  });
+  res.json({ success: true, data });
 });
 
 const listTrainingSessions = asyncHandler(async (req, res) => {
@@ -493,7 +600,26 @@ const listTrainingSessions = asyncHandler(async (req, res) => {
     .populate(populateCoachBrief)
     .sort({ scheduledAt: 1 })
     .lean();
-  res.json({ success: true, data: list });
+  const sessionIds = list.map((s) => s._id);
+  let attendanceBySession = new Map();
+  if (sessionIds.length) {
+    const rows = await AttendanceRecord.find({ session: { $in: sessionIds }, player: req.user.id })
+      .select('session present')
+      .lean();
+    attendanceBySession = new Map(rows.map((row) => [String(row.session), row]));
+  }
+  try {
+    await evaluatePlayerAttendanceAlert(req.user.id);
+  } catch (e) {
+    console.warn('[attendance-alert] failed:', e.message);
+  }
+  res.json({
+    success: true,
+    data: list.map((s) => ({
+      ...s,
+      attendance: attendanceBySession.get(String(s._id)) || null,
+    })),
+  });
 });
 
 const listTrainingPlans = asyncHandler(async (req, res) => {
@@ -520,6 +646,12 @@ const holdGroundBooking = asyncHandler(async (req, res) => {
 
   const holdMins = parseInt(process.env.HOLD_MINUTES || '5', 10);
   const holdExpiresAt = new Date(Date.now() + holdMins * 60 * 1000);
+  const durationHours =
+    (end.getTime() - start.getTime()) / (60 * 60 * 1000);
+  const computedAmount =
+    amount != null && Number.isFinite(Number(amount))
+      ? Number(amount)
+      : Math.round((ground.pricePerHour || 0) * durationHours);
 
   const booking = await GroundBooking.create({
     ground: groundId,
@@ -529,7 +661,7 @@ const holdGroundBooking = asyncHandler(async (req, res) => {
     endTime: end,
     status: 'held',
     holdExpiresAt,
-    amount: amount ?? 0,
+    amount: computedAmount,
   });
   res.status(201).json({ success: true, data: booking });
 });
@@ -577,26 +709,34 @@ const createGroundBookingPaymentIntent = asyncHandler(async (req, res) => {
 });
 
 const confirmGroundPayment = asyncHandler(async (req, res) => {
+  const { guestName, guestPhone, guestAddress, guestCity } = req.body;
   const booking = await GroundBooking.findOne({
     _id: req.params.id,
     bookedBy: req.user.id,
     bookedByRole: 'player',
     status: 'held',
-  });
+  }).populate('ground');
   if (!booking) return res.status(404).json({ success: false, message: 'Hold not found' });
   if (booking.holdExpiresAt < new Date()) {
     booking.status = 'cancelled';
     await booking.save();
     return res.status(410).json({ success: false, message: 'Hold expired' });
   }
-  const conflict = await hasOverlap(booking.ground, booking.startTime, booking.endTime, booking._id);
+  if (!guestName || !String(guestName).trim() || !guestPhone || !String(guestPhone).trim()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Guest name and phone are required to confirm booking.',
+    });
+  }
+  const groundId = booking.ground?._id || booking.ground;
+  const conflict = await hasOverlap(groundId, booking.startTime, booking.endTime, booking._id);
   if (conflict) {
     booking.status = 'cancelled';
     await booking.save();
     return res.status(409).json({ success: false, message: 'Slot no longer available' });
   }
 
-  let externalRef = 'mock-gateway';
+  let externalRef = 'cash-at-venue';
   if (isStripeEnabled()) {
     const { paymentIntentId } = req.body;
     if (!paymentIntentId) {
@@ -625,7 +765,33 @@ const confirmGroundPayment = asyncHandler(async (req, res) => {
   booking.payment = payment._id;
   booking.status = 'confirmed';
   booking.holdExpiresAt = undefined;
+  booking.confirmationToken = generateBookingToken();
+  booking.guestName = String(guestName).trim();
+  booking.guestPhone = String(guestPhone).trim();
+  booking.guestAddress = guestAddress ? String(guestAddress).trim() : undefined;
+  booking.guestCity = guestCity ? String(guestCity).trim() : undefined;
+  booking.paymentNote =
+    externalRef === 'cash-at-venue'
+      ? booking.amount > 0
+        ? `Pay PKR ${booking.amount} at the venue on arrival.`
+        : 'No advance payment — pay at venue if applicable.'
+      : `Card payment received (PKR ${booking.amount}). Present your confirmation reference at the venue.`;
   await booking.save();
+
+  const ground = booking.ground;
+  if (ground?.businessOwner) {
+    try {
+      await notifyUser(ground.businessOwner, {
+        title: 'New ground booking',
+        body: `${booking.guestName} booked ${ground.name} for ${new Date(booking.startTime).toLocaleString()}. Ref: ${booking.confirmationToken}`,
+        category: 'booking',
+        actionUrl: '/business/ground-bookings',
+      });
+    } catch (e) {
+      console.warn('[notify][ground-booking-owner] failed:', e.message);
+    }
+  }
+
   res.json({ success: true, data: booking });
 });
 
@@ -657,7 +823,14 @@ const browseProducts = asyncHandler(async (req, res) => {
     isActive: true,
     businessOwner: { $in: ownerIds },
   };
-  if (req.query.sport) filter.sportType = req.query.sport;
+  if (req.query.sport) {
+    const s = String(req.query.sport).toLowerCase();
+    if (s === 'cricket' || s === 'badminton') {
+      filter.sportType = { $in: [s, 'general'] };
+    } else {
+      filter.sportType = s;
+    }
+  }
   if (req.query.q) filter.name = new RegExp(String(req.query.q).trim(), 'i');
   if (req.query.category) filter.category = new RegExp(String(req.query.category).trim(), 'i');
   const list = await Product.find(filter).sort({ createdAt: -1 }).lean();
@@ -1007,6 +1180,8 @@ module.exports = {
   getRecommendations,
   listCoachCertificates,
   streamCoachCertificateFile,
+  getCoachPublicProfile,
+  listCoachPublicFeedback,
   createTrainingRequest,
   listMyTrainingRequests,
   listTrainingSessions,

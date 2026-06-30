@@ -21,17 +21,23 @@ function SkillChip({ item, variant }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-white">{item.skill}</p>
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">{item.category}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{item.category}</p>
         </div>
         <span
-          className={`shrink-0 font-orbitron text-sm ${
+          className={`shrink-0 font-orbitron text-base ${
             isImprove ? (item.level === 'urgent' ? 'text-red-300' : 'text-amber-200') : 'text-player-green'
           }`}
         >
           {item.score}%
         </span>
       </div>
-      {item.hint ? <p className="mt-1.5 text-xs text-player-on-variant">{item.hint}</p> : null}
+      {item.hint ? <p className="mt-1.5 text-sm text-player-on-variant">{item.hint}</p> : null}
+      {item.practiceDrill ? (
+        <p className="mt-2 rounded-md bg-black/25 px-2 py-1.5 text-sm text-player-green">
+          <span className="font-headline text-[10px] uppercase tracking-wider text-slate-500">Practice: </span>
+          {item.practiceDrill}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -54,7 +60,7 @@ export default function PlayerPlanFeedback({ insights }) {
 
       {improveMost.length ? (
         <div>
-          <p className="font-headline text-[10px] font-bold uppercase tracking-wide text-amber-200">
+          <p className="font-headline text-sm font-bold uppercase tracking-wide text-amber-200">
             Top priorities to improve
           </p>
           <ul className="mt-2 space-y-2">
@@ -67,7 +73,7 @@ export default function PlayerPlanFeedback({ insights }) {
 
       {doingWell.length ? (
         <div>
-          <p className="font-headline text-[10px] font-bold uppercase tracking-wide text-player-green">
+          <p className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">
             Going well — maintain
           </p>
           <ul className="mt-2 space-y-2">

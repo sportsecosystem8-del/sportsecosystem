@@ -229,6 +229,7 @@ function buildPlayerInsights(gapAnalysis) {
       score: r.score,
       level: 'urgent',
       hint: PLAYER_SKILL_CRITERIA.urgent.playerHint,
+      practiceDrill: drillForSkill(sport, r.skill),
     })),
     ...needsWork.map((r) => ({
       category: r.category,
@@ -236,6 +237,7 @@ function buildPlayerInsights(gapAnalysis) {
       score: r.score,
       level: 'focus',
       hint: PLAYER_SKILL_CRITERIA.focus.playerHint,
+      practiceDrill: drillForSkill(sport, r.skill),
     })),
   ].slice(0, 8);
 

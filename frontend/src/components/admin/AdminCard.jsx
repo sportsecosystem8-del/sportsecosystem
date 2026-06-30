@@ -9,7 +9,7 @@ export default function AdminCard({
   children,
   className = '',
   accent = 'cyan',
-  as: Tag = 'div',
+  as = 'div',
   interactive = false,
 }) {
   const border = accentMap[accent] ?? accentMap.cyan;
@@ -17,9 +17,10 @@ export default function AdminCard({
   const motion = interactive
     ? 'group relative overflow-hidden transition-transform duration-300 hover:scale-[1.02]'
     : '';
+  const Wrapper = as;
 
   return (
-    <Tag className={`admin-glass rounded-admin-lg ${accentCls} ${motion} ${className}`.trim()}>
+    <Wrapper className={`admin-glass rounded-admin-lg ${accentCls} ${motion} ${className}`.trim()}>
       {interactive ? (
         <div
           className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-admin-cyan/20 to-transparent"
@@ -27,6 +28,6 @@ export default function AdminCard({
         />
       ) : null}
       {children}
-    </Tag>
+    </Wrapper>
   );
 }

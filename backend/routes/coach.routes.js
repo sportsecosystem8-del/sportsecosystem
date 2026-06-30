@@ -12,6 +12,7 @@ r.use(authenticate, loadUser, requireRole('coach'));
 /** Profile, verification docs, notifications, and platform subscription — no active sub required */
 r.get('/me/profile', c.getProfile);
 r.put('/me/profile', c.updateProfile);
+r.put('/me/availability', c.updateAvailability);
 r.post('/me/profile-photo', uploadImage.single('image'), c.uploadProfilePhoto);
 r.get('/subscription/status', c.getCoachSubscriptionStatus);
 r.post(
@@ -29,17 +30,20 @@ r.get('/dashboard', c.getDashboard);
 
 r.use(requireCoachPlatformSubscription);
 
-r.put('/me/availability', c.updateAvailability);
 r.get('/training-requests', c.listTrainingRequests);
 r.patch(
   '/training-requests/:id',
   [
     body('status').isIn(['accepted', 'rejected', 'pending']),
     body('scheduledAt').optional().isISO8601(),
+    body('meetingLocation').optional().trim(),
+    body('meetingAcademyName').optional().trim(),
   ],
   validateRequest,
   c.updateTrainingRequest
 );
+r.post('/training-requests/:id/mark-fees-cleared', [param('id').isMongoId()], validateRequest, c.markTrainingFeesCleared);
+r.post('/training-requests/:id/start-session', [param('id').isMongoId()], validateRequest, c.startTrainingFromRequest);
 r.get('/training-sessions', c.listTrainingSessions);
 r.post(
   '/training-sessions',
@@ -50,6 +54,16 @@ r.post(
   ],
   validateRequest,
   c.createTrainingSession
+);
+r.patch(
+  '/training-sessions/:id',
+  [
+    param('id').isMongoId(),
+    body('scheduledAt').optional().isISO8601(),
+    body('location').optional().trim(),
+  ],
+  validateRequest,
+  c.updateTrainingSession
 );
 r.post(
   '/training-plans/auto-draft',
@@ -113,6 +127,9 @@ r.delete('/ground-bookings/:id', c.cancelGroundBooking);
 r.get('/feedback', c.listFeedback);
 r.post('/feedback/:id/reply', [body('reply').notEmpty()], c.replyFeedback);
 r.get('/payments', c.listPayments);
+r.get('/student-fees', c.listStudentFees);
+r.put('/student-fees', c.upsertStudentFee);
+r.delete('/student-fees/:id', [param('id').isMongoId()], validateRequest, c.deleteStudentFee);
 r.post(
   '/payments/withdrawal',
   [body('amount').isFloat({ min: 0.01 })],

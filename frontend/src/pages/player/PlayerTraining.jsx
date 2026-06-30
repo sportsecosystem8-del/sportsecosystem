@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import PlayerSessionCard from '../../components/player/PlayerSessionCard';
+import PlayerAttendanceSection from '../../components/player/PlayerAttendanceSection';
+import PlayerWeeklyPlanCard from '../../components/player/PlayerWeeklyPlanCard';
 import CoachAvatar from '../../components/CoachAvatar';
 import PlayerIcon from '../../components/player/PlayerIcon';
 import { statusBadge } from '../../components/player/playerClassNames';
-import PlayerPlanFeedback from '../../components/player/PlayerPlanFeedback';
-import { parseWeeklySchedule } from '../../utils/planDisplay';
 import { api, getErrorMessage } from '../../services/api';
 import { coachAcademyLabel, playerLocationOrigin } from '../../utils/coachLocation';
 
@@ -56,9 +56,11 @@ export default function PlayerTraining() {
     <div className="space-y-10">
       <PlayerPageHeader
         title="Schedule"
-        subtitle="Training requests, confirmed sessions, and weekly plans from your coach."
+        subtitle="Sessions, attendance, and your coach's weekly training plan."
       />
       {err ? <p className="text-sm text-red-400">{err}</p> : null}
+
+      <PlayerAttendanceSection sessions={sessions} />
 
       <section>
         <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">Requests</h2>
@@ -98,6 +100,17 @@ export default function PlayerTraining() {
                       {coachAcademyLabel(cp) || '—'}
                     </p>
                   ) : null}
+                  {r.status === 'accepted' && r.meetingInstructions ? (
+                    <div className="mt-2 rounded-lg border border-player-green/25 bg-player-green/10 p-2.5 text-xs leading-relaxed text-slate-200">
+                      {r.meetingInstructions}
+                    </div>
+                  ) : null}
+                  {r.status === 'accepted' ? (
+                    <p className="mt-1.5 text-[10px] uppercase tracking-wider text-slate-500">
+                      Fees: {r.feesCleared ? 'cleared' : 'pending'} · Session:{' '}
+                      {r.sessionStarted ? 'scheduled' : 'after fees'}
+                    </p>
+                  ) : null}
                   {r.message ? (
                     <p className="mt-1.5 line-clamp-2 text-[11px] italic text-slate-500">&ldquo;{r.message}&rdquo;</p>
                   ) : null}
@@ -126,53 +139,32 @@ export default function PlayerTraining() {
       {past.length ? (
         <section>
           <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-slate-500">Past sessions</h2>
-          <ul className="mt-3 space-y-2 opacity-80">
+          <ul className="mt-3 space-y-2 opacity-90">
             {past.map((s) => (
-              <PlayerSessionCard key={s._id} session={s} playerOrigin={playerOrigin} compact />
+              <PlayerSessionCard key={s._id} session={s} playerOrigin={playerOrigin} compact showAttendance />
             ))}
           </ul>
         </section>
       ) : null}
 
       <section>
-        <h2 className="font-headline text-lg font-bold uppercase tracking-wide text-player-green">Weekly plans</h2>
-        <ul className="mt-4 space-y-3">
-          {plans.map((p) => {
-            const days = parseWeeklySchedule(p.exercises);
-            return (
-            <PlayerCard key={p._id} className="py-4 text-sm">
-              <span className="font-bold text-white">{p.title || 'Plan'}</span>
-              <span className="text-player-on-variant"> — week of {new Date(p.weekStartDate).toLocaleDateString()}</span>
-              {p.playerInsights ? (
-                <PlayerPlanFeedback insights={p.playerInsights} />
-              ) : null}
-              {p.goals && !p.playerInsights ? (
-                <div className="mt-3">
-                  <p className="font-headline text-[10px] font-bold uppercase tracking-wide text-slate-500">Goals</p>
-                  <pre className="mt-1 whitespace-pre-wrap text-xs text-player-on-variant">{p.goals}</pre>
-                </div>
-              ) : null}
-              {days.length ? (
-                <div className="mt-3">
-                  <p className="font-headline text-[10px] font-bold uppercase tracking-wide text-slate-500">This week</p>
-                  <ul className="mt-2 space-y-2">
-                    {days.map((row, i) => (
-                      <li key={i} className="text-xs text-player-on-variant">
-                        {row.day ? <span className="font-semibold text-player-green">{row.day}: </span> : null}
-                        {row.detail}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : p.exercises ? (
-                <pre className="mt-2 whitespace-pre-wrap text-xs text-player-on-variant">{p.exercises}</pre>
-              ) : null}
-            </PlayerCard>
-          );})}
+        <h2 className="font-headline text-xl font-bold uppercase tracking-wide text-player-green md:text-2xl">
+          Weekly training plans
+        </h2>
+        <p className="mt-1 text-sm text-player-on-variant">
+          Personalized goals and day-by-day practice from your coach&apos;s evaluation.
+        </p>
+        <ul className="mt-6 space-y-6">
+          {plans.map((p) => (
+            <li key={p._id}>
+              <PlayerWeeklyPlanCard plan={p} />
+            </li>
+          ))}
           {!plans.length ? (
-            <p className="text-sm text-player-on-variant">
-              No weekly plans yet. Your coach must publish a plan after generating it — check back soon or ask your coach.
-            </p>
+            <PlayerCard className="p-6 text-sm text-player-on-variant">
+              No weekly plans published yet. After your coach evaluates you and publishes a plan, it will appear here
+              with daily drills and improvement priorities.
+            </PlayerCard>
           ) : null}
         </ul>
       </section>

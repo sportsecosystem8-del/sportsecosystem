@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GroundVenueCard } from './GroundMedia';
 import { api, getErrorMessage } from '../services/api';
+import { sportDisplayLabel } from '../utils/sportDisplay';
 
 /**
  * Read-only ground directory for players and coaches.
- * Ground data is admin-managed; users browse and call the owner to book.
  */
 export default function GroundDirectoryView({
   accent = 'player',
@@ -12,25 +12,41 @@ export default function GroundDirectoryView({
   subtitle,
   PageHeader,
   selectClassName,
+  fieldClassName,
+  defaultSport = '',
+  bookingHint = false,
 }) {
   const [grounds, setGrounds] = useState([]);
-  const [sport, setSport] = useState('');
+  const [sport, setSport] = useState(defaultSport || '');
+  const [city, setCity] = useState('');
+  const [location, setLocation] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
   const [err, setErr] = useState('');
 
   const isCoach = accent === 'coach';
   const accentText = isCoach ? 'text-[#ff7524]' : 'text-player-green';
+  const inputCls =
+    fieldClassName ||
+    (isCoach
+      ? 'w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white'
+      : 'w-full rounded-player-nested border border-white/[0.06] bg-player-container py-2.5 px-4 text-sm text-player-on-surface');
 
   useEffect(() => {
+    const params = new URLSearchParams();
+    if (sport) params.set('sport', sport);
+    if (city.trim()) params.set('city', city.trim());
+    if (location.trim()) params.set('location', location.trim());
+    if (minPrice !== '') params.set('minPrice', minPrice);
+    if (maxPrice !== '') params.set('maxPrice', maxPrice);
+    const qs = params.toString();
     api
-      .get('/public/grounds')
+      .get(`/public/grounds${qs ? `?${qs}` : ''}`)
       .then((r) => setGrounds(r.data.data || []))
       .catch((e) => setErr(getErrorMessage(e)));
-  }, []);
+  }, [sport, city, location, minPrice, maxPrice]);
 
-  const filtered = useMemo(() => {
-    if (!sport) return grounds;
-    return grounds.filter((g) => g.sportType === sport);
-  }, [grounds, sport]);
+  const filtered = useMemo(() => grounds, [grounds]);
 
   return (
     <div>
@@ -50,28 +66,64 @@ export default function GroundDirectoryView({
         }`}
       >
         <span className={`material-symbols-outlined text-base ${accentText}`}>info</span>
-        <span>Admin-listed venues · call owner to book & pay by phone</span>
+        <span>
+          {bookingHint
+            ? 'Use the booking page to reserve slots online. Filters match your sport by default.'
+            : 'Venues filtered by sport — adjust price or location as needed.'}
+        </span>
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <select className={selectClassName} value={sport} onChange={(e) => setSport(e.target.value)}>
+      {sport ? (
+        <p className={`mb-3 text-xs font-semibold uppercase tracking-wider ${accentText}`}>
+          Showing {sportDisplayLabel(sport)} venues
+        </p>
+      ) : null}
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <select className={selectClassName || inputCls} value={sport} onChange={(e) => setSport(e.target.value)}>
           <option value="">All sports</option>
           <option value="cricket">Cricket</option>
           <option value="badminton">Badminton</option>
         </select>
-        <p className={`text-xs font-medium uppercase tracking-wider ${isCoach ? 'text-slate-400' : 'text-player-on-variant'}`}>
-          {filtered.length} venue{filtered.length === 1 ? '' : 's'}
-        </p>
+        <input
+          className={inputCls}
+          placeholder="City"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+        />
+        <input
+          className={inputCls}
+          placeholder="Area / location"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+        />
+        <input
+          className={inputCls}
+          type="number"
+          min="0"
+          placeholder="Min price/hr (PKR)"
+          value={minPrice}
+          onChange={(e) => setMinPrice(e.target.value)}
+        />
+        <input
+          className={inputCls}
+          type="number"
+          min="0"
+          placeholder="Max price/hr (PKR)"
+          value={maxPrice}
+          onChange={(e) => setMaxPrice(e.target.value)}
+        />
       </div>
+      <p className={`mb-5 text-xs font-medium uppercase tracking-wider ${isCoach ? 'text-slate-400' : 'text-player-on-variant'}`}>
+        {filtered.length} venue{filtered.length === 1 ? '' : 's'}
+      </p>
 
       {!filtered.length ? (
         <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
           <span className="material-symbols-outlined text-5xl text-slate-600">stadium</span>
-          <p className="mt-4 font-headline text-sm font-bold uppercase tracking-wider text-slate-400">
-            No venues found
-          </p>
+          <p className="mt-4 font-headline text-sm font-bold uppercase tracking-wider text-slate-400">No venues found</p>
           <p className={`mt-2 text-sm ${isCoach ? 'text-slate-500' : 'text-player-on-variant'}`}>
-            {sport ? 'Try another sport filter or check back later.' : 'No active grounds listed yet.'}
+            Try adjusting your price range or location filters.
           </p>
         </div>
       ) : (

@@ -12,11 +12,15 @@ export default function CoachSessions() {
   const [playerId, setPlayerId] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [location, setLocation] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editScheduledAt, setEditScheduledAt] = useState('');
+  const [editLocation, setEditLocation] = useState('');
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [markingId, setMarkingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -86,13 +90,50 @@ export default function CoachSessions() {
     }
   };
 
+  const startEdit = (session) => {
+    setEditingId(session._id);
+    setEditScheduledAt(new Date(session.scheduledAt).toISOString().slice(0, 16));
+    setEditLocation(session.location || '');
+    setErr('');
+    setMsg('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditScheduledAt('');
+    setEditLocation('');
+  };
+
+  const saveEdit = async (sessionId) => {
+    if (!editScheduledAt) {
+      setErr('Pick a date and time.');
+      return;
+    }
+    setUpdatingId(sessionId);
+    setErr('');
+    setMsg('');
+    try {
+      await api.patch(`/coaches/training-sessions/${sessionId}`, {
+        scheduledAt: new Date(editScheduledAt).toISOString(),
+        location: editLocation.trim() || undefined,
+      });
+      setMsg('Session updated. The player has been notified.');
+      cancelEdit();
+      await load({ silent: true });
+    } catch (e) {
+      setErr(getErrorMessage(e));
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const upcoming = list.filter((s) => s.status === 'scheduled');
   const completed = list.filter((s) => s.status !== 'scheduled');
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-5xl tracking-[0.08em] text-white">WEEKLY SCHEDULE</h1>
+        <h1 className="font-display text-3xl tracking-[0.08em] text-white sm:text-5xl">WEEKLY SCHEDULE</h1>
         <p className="font-headline text-xs uppercase tracking-[0.3em] text-slate-500">Training Timeline</p>
       </div>
 
@@ -106,8 +147,7 @@ export default function CoachSessions() {
         <div>
           <p className="font-display text-2xl tracking-[0.1em] text-white">SCHEDULE SESSION</p>
           <p className="mt-1 text-sm text-slate-400">
-            Add as many sessions as you need for accepted students. Times must fit your availability and avoid 90-minute
-            overlaps.
+            Add sessions for accepted students. Update upcoming sessions anytime — players are notified automatically.
           </p>
         </div>
 
@@ -174,7 +214,21 @@ export default function CoachSessions() {
           <h2 className="font-headline text-xs font-bold uppercase tracking-[0.2em] text-[#ff7524]">Upcoming</h2>
           <ul className="mt-4 grid gap-4">
             {upcoming.map((s) => (
-              <SessionRow key={s._id} session={s} markingId={markingId} onMark={mark} />
+              <SessionRow
+                key={s._id}
+                session={s}
+                markingId={markingId}
+                onMark={mark}
+                editingId={editingId}
+                editScheduledAt={editScheduledAt}
+                editLocation={editLocation}
+                updatingId={updatingId}
+                onStartEdit={startEdit}
+                onCancelEdit={cancelEdit}
+                onSaveEdit={saveEdit}
+                onEditScheduledAt={setEditScheduledAt}
+                onEditLocation={setEditLocation}
+              />
             ))}
           </ul>
         </section>
@@ -208,12 +262,28 @@ function AttendanceBadge({ attendance }) {
   );
 }
 
-function SessionRow({ session, onMark, markingId, dimmed = false }) {
+function SessionRow({
+  session,
+  onMark,
+  markingId,
+  dimmed = false,
+  editingId,
+  editScheduledAt,
+  editLocation,
+  updatingId,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onEditScheduledAt,
+  onEditLocation,
+}) {
   const name =
     session.player?.playerProfile?.fullName || session.player?.email || `player ${session.player?._id || session.player}`;
   const isMarking = markingId === session._id;
   const hasAttendance = Boolean(session.attendance);
   const canMark = session.status === 'scheduled' && !isMarking;
+  const isEditing = editingId === session._id;
+  const isUpdating = updatingId === session._id;
 
   return (
     <li
@@ -223,17 +293,56 @@ function SessionRow({ session, onMark, markingId, dimmed = false }) {
     >
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-display text-3xl text-white">{name}</p>
+          <p className="font-display text-2xl text-white sm:text-3xl">{name}</p>
           <AttendanceBadge attendance={session.attendance} />
         </div>
-        <p className="font-orbitron text-xs uppercase tracking-[0.15em] text-[#ff7524]">
-          {new Date(session.scheduledAt).toLocaleString()}
-        </p>
-        {session.location ? <p className="mt-1 text-xs text-slate-400">{session.location}</p> : null}
+        {!isEditing ? (
+          <>
+            <p className="font-orbitron text-xs uppercase tracking-[0.15em] text-[#ff7524]">
+              {new Date(session.scheduledAt).toLocaleString()}
+            </p>
+            {session.location ? <p className="mt-1 text-xs text-slate-400">{session.location}</p> : null}
+          </>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <ThemedDateTimePicker value={editScheduledAt} onChange={onEditScheduledAt} placeholder="New time" />
+            <input
+              className={coachField}
+              placeholder="Location"
+              value={editLocation}
+              onChange={(e) => onEditLocation(e.target.value)}
+            />
+          </div>
+        )}
         <p className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">{session.status}</p>
       </div>
-      {canMark ? (
-        <div className="flex gap-2">
+      {isEditing ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="bg-[#ff7524] px-3 py-2 font-display text-lg tracking-widest text-black disabled:opacity-50"
+            disabled={isUpdating}
+            onClick={() => onSaveEdit(session._id)}
+          >
+            {isUpdating ? 'SAVING…' : 'SAVE'}
+          </button>
+          <button
+            type="button"
+            className="border border-player-inner px-3 py-2 font-display text-lg tracking-widest text-slate-300"
+            onClick={onCancelEdit}
+          >
+            CANCEL
+          </button>
+        </div>
+      ) : canMark ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="border border-[#ff7524]/50 px-3 py-2 font-display text-sm tracking-widest text-[#ff7524] hover:bg-[#ff7524]/10"
+            onClick={() => onStartEdit(session)}
+          >
+            EDIT
+          </button>
           <button
             type="button"
             className="bg-[#ff7524] px-3 py-2 font-display text-lg tracking-widest text-black transition hover:brightness-110 disabled:opacity-50"
@@ -255,6 +364,14 @@ function SessionRow({ session, onMark, markingId, dimmed = false }) {
         <p className="font-headline text-[10px] uppercase tracking-wider text-[#ff7524]">Saving…</p>
       ) : hasAttendance ? (
         <p className="text-right text-[10px] uppercase tracking-wider text-slate-500">Attendance recorded</p>
+      ) : session.status === 'scheduled' ? (
+        <button
+          type="button"
+          className="border border-[#ff7524]/50 px-3 py-2 font-display text-sm tracking-widest text-[#ff7524]"
+          onClick={() => onStartEdit?.(session)}
+        >
+          EDIT
+        </button>
       ) : null}
     </li>
   );

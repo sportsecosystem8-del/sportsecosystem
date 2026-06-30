@@ -4,6 +4,7 @@ import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import { playerBtnOutlineSm, playerBtnPrimary } from '../../components/player/playerClassNames';
 import ProductImage from '../../components/ProductImage';
 import { formatProductPrice } from '../../utils/productCurrency';
+import { playerShopSubtitle, sportFilterBadge } from '../../utils/sportDisplay';
 import { api, getErrorMessage } from '../../services/api';
 
 const SHIPPING_FIELDS = [
@@ -53,6 +54,16 @@ export default function PlayerShop() {
     load();
   }, [sport, q, category]);
 
+  useEffect(() => {
+    api
+      .get('/players/me/profile')
+      .then((r) => {
+        const sp = r.data?.data?.sportPreference;
+        if (sp) setSport(sp);
+      })
+      .catch(() => {});
+  }, []);
+
   const cartItems = () =>
     Object.entries(cart)
       .filter(([, qty]) => qty > 0)
@@ -101,7 +112,12 @@ export default function PlayerShop() {
 
   return (
     <div>
-      <PlayerPageHeader title="Equipment" subtitle="Browse verified stores — filters, sale pricing, checkout." />
+      <PlayerPageHeader title="Equipment" subtitle={playerShopSubtitle(sport)} />
+      {sportFilterBadge(sport) ? (
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-player-green">
+          {sportFilterBadge(sport)}
+        </p>
+      ) : null}
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
       {ok ? <p className="mb-4 text-sm text-player-green">{ok}</p> : null}
 

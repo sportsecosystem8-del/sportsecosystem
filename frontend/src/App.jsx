@@ -32,12 +32,15 @@ import CoachSubscription from './pages/coach/CoachSubscription';
 import CoachDocuments from './pages/coach/CoachDocuments';
 import CoachNotifications from './pages/coach/CoachNotifications';
 import CoachProfile from './pages/coach/CoachProfile';
+import CoachPayments from './pages/coach/CoachPayments';
 import BusinessDashboard from './pages/business/BusinessDashboard';
 import BusinessProducts from './pages/business/BusinessProducts';
 import BusinessOrders from './pages/business/BusinessOrders';
 import BusinessSubscription from './pages/business/BusinessSubscription';
 import BusinessCoaches from './pages/business/BusinessCoaches';
 import BusinessDocuments from './pages/business/BusinessDocuments';
+import BusinessGrounds from './pages/business/BusinessGrounds';
+import BusinessGroundBookings from './pages/business/BusinessGroundBookings';
 import BusinessNotifications from './pages/business/BusinessNotifications';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminVerifyCoaches from './pages/admin/AdminVerifyCoaches';
@@ -92,6 +95,7 @@ export default function App() {
           <Route path="performance" element={<CoachPerformance />} />
           <Route path="matches" element={<Navigate to="/coach" replace />} />
           <Route path="feedback" element={<CoachFeedback />} />
+          <Route path="payments" element={<CoachPayments />} />
           <Route path="documents" element={<CoachDocuments />} />
           <Route path="notifications" element={<CoachNotifications />} />
         </Route>
@@ -104,6 +108,8 @@ export default function App() {
           <Route path="orders" element={<BusinessOrders />} />
           <Route path="subscription" element={<BusinessSubscription />} />
           <Route path="coaches" element={<BusinessCoaches />} />
+          <Route path="grounds" element={<BusinessGrounds />} />
+          <Route path="ground-bookings" element={<BusinessGroundBookings />} />
           <Route path="notifications" element={<BusinessNotifications />} />
           <Route path="documents" element={<BusinessDocuments />} />
         </Route>

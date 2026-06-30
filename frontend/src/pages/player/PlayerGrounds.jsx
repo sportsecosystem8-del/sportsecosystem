@@ -1,15 +1,16 @@
-import PlayerPageHeader from '../../components/player/PlayerPageHeader';
-import GroundDirectoryView from '../../components/GroundDirectoryView';
-import { playerSelect } from '../../components/player/playerClassNames';
+import { useEffect, useState } from 'react';
+import PlayerGroundBook from './PlayerGroundBook';
+import { api } from '../../services/api';
 
 export default function PlayerGrounds() {
-  return (
-    <GroundDirectoryView
-      accent="player"
-      title="Indoor grounds"
-      subtitle="Verified cricket and badminton venues — full details and direct owner contact."
-      PageHeader={PlayerPageHeader}
-      selectClassName={playerSelect}
-    />
-  );
+  const [sport, setSport] = useState('');
+
+  useEffect(() => {
+    api
+      .get('/players/me/profile')
+      .then((r) => setSport(r.data?.data?.sportPreference || ''))
+      .catch(() => {});
+  }, []);
+
+  return <PlayerGroundBook key={sport || 'all'} defaultSport={sport} />;
 }

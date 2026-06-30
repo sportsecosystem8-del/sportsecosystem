@@ -5,6 +5,7 @@ import CoachStudentPicker from '../../components/coach/CoachStudentPicker';
 import { api, getErrorMessage } from '../../services/api';
 import {
   defaultScoresFromRubric,
+  playerCategoryLabel,
   scoresToPayload,
   sportLabel,
 } from '../../utils/evaluationDisplay';
@@ -97,12 +98,14 @@ export default function CoachPerformance() {
       .finally(() => setLoadingStudents(false));
   }, []);
 
-  const loadRubric = useCallback(async (sport) => {
+  const loadRubric = useCallback(async (sport, playerCategory) => {
     const slug = sport || 'cricket';
     setLoadingRubric(true);
     setErr('');
     try {
-      const { data } = await api.get('/coaches/evaluation-rubric', { params: { sport: slug } });
+      const params = { sport: slug };
+      if (slug === 'cricket' && playerCategory) params.playerCategory = playerCategory;
+      const { data } = await api.get('/coaches/evaluation-rubric', { params });
       const rub = data.data;
       setRubric(rub);
       setScores(defaultScoresFromRubric(rub, 70));
@@ -121,8 +124,11 @@ export default function CoachPerformance() {
       setScores({});
       return;
     }
-    loadRubric(selectedStudent.sportPreference || 'cricket');
+    loadRubric(selectedStudent.sportPreference || 'cricket', selectedStudent.playerCategory);
   }, [selectedStudent, loadRubric]);
+
+  const cricketMissingCategory =
+    selectedStudent?.sportPreference === 'cricket' && !selectedStudent?.playerCategory;
 
   const previewOverall = useMemo(() => {
     const payload = scoresToPayload(scores);
@@ -213,7 +219,15 @@ export default function CoachPerformance() {
           <div className="flex flex-col justify-end">
             {selectedStudent ? (
               <p className="rounded border border-[#ff7524]/30 bg-[#ff7524]/5 px-3 py-2 text-xs text-slate-300">
-                Rubric: <span className="font-headline uppercase tracking-wider text-[#ff7524]">{sportLabel(selectedStudent.sportPreference)}</span>
+                Rubric:{' '}
+                <span className="font-headline uppercase tracking-wider text-[#ff7524]">
+                  {sportLabel(selectedStudent.sportPreference)}
+                </span>
+                {selectedStudent.sportPreference === 'cricket' && selectedStudent.playerCategory ? (
+                  <span className="ml-2 text-slate-400">
+                    · {playerCategoryLabel(selectedStudent.playerCategory)}
+                  </span>
+                ) : null}
                 {previewOverall != null ? (
                   <span className="ml-2 text-slate-400">· Preview overall {previewOverall}%</span>
                 ) : null}
@@ -221,6 +235,13 @@ export default function CoachPerformance() {
             ) : null}
           </div>
         </div>
+
+        {cricketMissingCategory ? (
+          <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            This cricket player has not set a playing category yet. Ask them to update Profile (batsman, bowler, or
+            all-rounder) so evaluations match their role.
+          </p>
+        ) : null}
 
         {loadingRubric ? (
           <p className="font-headline text-xs uppercase tracking-[0.2em] text-slate-500">Loading skill rubric…</p>
@@ -252,7 +273,7 @@ export default function CoachPerformance() {
         />
         <button
           type="submit"
-          disabled={!students.length || !playerId || saving || loadingRubric}
+          disabled={!students.length || !playerId || saving || loadingRubric || cricketMissingCategory}
           className="bg-[#ff7524] px-8 py-3 font-display text-2xl tracking-[0.14em] text-black disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Submit evaluation'}

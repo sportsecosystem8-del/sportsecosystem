@@ -33,6 +33,7 @@ const trainingPlanSchema = new mongoose.Schema(
           score: Number,
           level: String,
           hint: String,
+          practiceDrill: String,
         },
       ],
       doingWell: [
@@ -42,6 +43,7 @@ const trainingPlanSchema = new mongoose.Schema(
           score: Number,
           level: String,
           hint: String,
+          practiceDrill: String,
         },
       ],
       overallAvg: Number,
