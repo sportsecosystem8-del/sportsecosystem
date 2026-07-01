@@ -156,7 +156,7 @@ export function GroundContactBar({ ground, accent = 'player', compact = false })
 }
 
 /** Compact venue card — full details, professional layout, small footprint. */
-export function GroundVenueCard({ ground, accent = 'player' }) {
+export function GroundVenueCard({ ground, accent = 'player', hideCallToBook = false }) {
   const [expanded, setExpanded] = useState(false);
   if (!ground) return null;
 
@@ -173,6 +173,8 @@ export function GroundVenueCard({ ground, accent = 'player' }) {
   const btnClass = isCoach
     ? 'bg-[#ff7524] text-black hover:bg-[#ff8f4d]'
     : 'bg-player-green text-black hover:brightness-110';
+  const isOnlineBooking = ground.listedBy === 'business_owner' || Boolean(ground.businessOwner);
+  const showCall = !hideCallToBook && !isOnlineBooking && ground.ownerPhone;
 
   const sizeLine = [
     ground.lengthFeet ? `${ground.lengthFeet} ft` : null,
@@ -266,7 +268,7 @@ export function GroundVenueCard({ ground, accent = 'player' }) {
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-          {ground.ownerPhone ? (
+          {showCall ? (
             <a
               href={`tel:${ground.ownerPhone}`}
               className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 font-headline text-[10px] font-bold uppercase tracking-wider transition sm:flex-none ${btnClass}`}
@@ -274,6 +276,11 @@ export function GroundVenueCard({ ground, accent = 'player' }) {
               <span className="material-symbols-outlined text-sm">call</span>
               Call to book
             </a>
+          ) : isOnlineBooking ? (
+            <span className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-player-green/30 bg-player-green/10 px-3 py-2 font-headline text-[10px] font-bold uppercase tracking-wider text-player-green sm:flex-none">
+              <span className="material-symbols-outlined text-sm">event_available</span>
+              Book online in app
+            </span>
           ) : null}
           <button
             type="button"

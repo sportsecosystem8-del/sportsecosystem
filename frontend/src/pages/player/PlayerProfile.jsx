@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import PlayerAvatar from '../../components/PlayerAvatar';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerIcon from '../../components/player/PlayerIcon';
-import { playerProfileInput, playerProfileSaveBtn, playerBtnOutlineSm } from '../../components/player/playerClassNames';
-import WeeklyScheduleEditor, { normalizeSlots } from '../../components/shared/WeeklyScheduleEditor';
+import { playerProfileInput, playerProfileSaveBtn } from '../../components/player/playerClassNames';
+import WeeklyDaysTimeEditor from '../../components/shared/WeeklyDaysTimeEditor';
 import { PLAYER_CATEGORIES } from '../../utils/evaluationDisplay';
 import { api, getErrorMessage } from '../../services/api';
 
@@ -45,7 +45,7 @@ export default function PlayerProfile() {
         setPlayerCategory(p.playerCategory || '');
         setCity(p.city || '');
         setAddress(p.address || '');
-        setTrainingPreferences(normalizeSlots(p.trainingPreferences));
+        setTrainingPreferences(Array.isArray(p.trainingPreferences) ? p.trainingPreferences : []);
       } catch (e) {
         if (!cancelled) setErr(getErrorMessage(e));
       }
@@ -282,15 +282,15 @@ export default function PlayerProfile() {
             Training schedule
           </h2>
           <p className="mt-1 text-xs text-player-on-variant">
-            Pick the days and times you want to train. Coach recommendations use this to match your availability.
+            Select the days you want to train and your usual time. Coach recommendations match on shared days, plus
+            location, skill, and experience.
           </p>
           <div className="mt-6">
-            <WeeklyScheduleEditor
+            <WeeklyDaysTimeEditor
               slots={trainingPreferences}
               onChange={setTrainingPreferences}
               fieldClass={playerProfileInput}
-              addButtonClass={playerBtnOutlineSm}
-              emptyHint="No slots yet — add when you usually want training sessions."
+              emptyHint="Pick your preferred training days — used for coach matching."
             />
           </div>
         </PlayerCard>

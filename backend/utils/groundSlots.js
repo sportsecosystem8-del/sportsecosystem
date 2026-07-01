@@ -72,10 +72,31 @@ function generateBookingToken() {
   return `GB-${Date.now().toString(36).toUpperCase()}-${rand}`;
 }
 
+/** Closest available slot to a target start time (ISO string). */
+function findNearestAvailableSlot(slots, targetStartISO) {
+  if (!Array.isArray(slots) || !targetStartISO) return null;
+  const target = new Date(targetStartISO).getTime();
+  if (Number.isNaN(target)) return null;
+  let best = null;
+  let bestDist = Infinity;
+  for (const slot of slots) {
+    if (!slot?.available) continue;
+    const start = new Date(slot.startTime).getTime();
+    if (Number.isNaN(start)) continue;
+    const dist = Math.abs(start - target);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = slot;
+    }
+  }
+  return best;
+}
+
 module.exports = {
   parseTimeOnDate,
   generateDaySlots,
   slotsForGroundOnDay,
   fetchActiveBookingsForGroundOnDay,
   generateBookingToken,
+  findNearestAvailableSlot,
 };

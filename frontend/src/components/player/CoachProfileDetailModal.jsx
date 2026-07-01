@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import CoachAvatar from '../CoachAvatar';
 import CoachLocationLines from './CoachLocationLines';
 import { playerBtnOutlineSm, playerBtnSm } from './playerClassNames';
+import { slotsToWeeklyPattern } from '../shared/WeeklyDaysTimeEditor';
 import { WEEKDAY_OPTIONS } from '../shared/WeeklyScheduleEditor';
+import { publicAssetUrl } from '../../utils/assetUrl';
 import { api, getErrorMessage } from '../../services/api';
 
 function Stars({ rating }) {
@@ -18,10 +20,13 @@ function Stars({ rating }) {
   );
 }
 
-function formatAvailability(slots) {
-  if (!Array.isArray(slots) || !slots.length) return null;
-  const dayLabel = (d) => WEEKDAY_OPTIONS.find((x) => x.value === d)?.label?.slice(0, 3) || `D${d}`;
-  return slots.map((s) => `${dayLabel(s.dayOfWeek)} ${s.start}–${s.end}`).join(' · ');
+function formatWeeklyAvailability(slots) {
+  const { days, start, end } = slotsToWeeklyPattern(slots);
+  if (!days.length) return null;
+  const labels = days
+    .map((d) => WEEKDAY_OPTIONS.find((x) => x.value === d)?.label?.slice(0, 3) || `D${d}`)
+    .join(', ');
+  return `${labels} · ${start}–${end}`;
 }
 
 export default function CoachProfileDetailModal({
@@ -62,7 +67,8 @@ export default function CoachProfileDetailModal({
   if (!open) return null;
 
   const p = profile || {};
-  const availability = formatAvailability(p.availability);
+  const availability = formatWeeklyAvailability(p.availability);
+  const academyPhotos = Array.isArray(p.academyImageUrls) ? p.academyImageUrls : [];
   const levels = (p.preferredPlayerLevels || []).map((l) => l.charAt(0).toUpperCase() + l.slice(1)).join(', ');
 
   return (
@@ -129,6 +135,22 @@ export default function CoachProfileDetailModal({
           <div className="mt-4">
             <CoachLocationLines profile={p} playerOrigin={playerOrigin} className="text-sm" />
           </div>
+
+          {academyPhotos.length ? (
+            <div className="mt-4">
+              <p className="font-headline text-[10px] uppercase tracking-wider text-slate-500">Academy photos</p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {academyPhotos.map((url) => (
+                  <img
+                    key={url}
+                    src={publicAssetUrl(url)}
+                    alt="Academy"
+                    className="h-28 w-40 shrink-0 rounded-lg object-cover"
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {p.bio ? (
             <div className="mt-4 rounded-lg border border-white/10 bg-player-inner/30 p-3">

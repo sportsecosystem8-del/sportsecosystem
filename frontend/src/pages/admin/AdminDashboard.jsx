@@ -105,7 +105,12 @@ export default function AdminDashboard() {
     };
   }, []);
 
-  const fmtMoney = (n) =>
+  const fmtUsd = (n) =>
+    typeof n === 'number'
+      ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+      : '—';
+
+  const fmtPkr = (n) =>
     typeof n === 'number'
       ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'PKR', maximumFractionDigits: 0 }).format(n)
       : '—';
@@ -192,7 +197,18 @@ export default function AdminDashboard() {
             <StatCard label="Total players" value={d.users?.players} accent="cyan" icon="groups" />
             <StatCard label="Total coaches" value={d.users?.coaches} accent="gold" icon="sports_soccer" />
             <StatCard label="Business owners" value={d.users?.businesses} accent="orange" icon="storefront" />
-            <StatCard label="Revenue (completed)" value={fmtMoney(d.revenueTotal)} accent="cyan" icon="payments" />
+            <StatCard label="Subscription revenue" value={fmtUsd(d.revenueSubscriptionUsd)} accent="cyan" icon="payments" />
+          </div>
+
+          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <StatCard label="Ground & shop revenue (PKR)" value={fmtPkr(d.revenueLocalPkr)} accent="gold" icon="stadium" />
+            <AdminCard accent="none" className="border border-white/[0.06] p-5">
+              <p className="font-headline text-xs font-bold uppercase tracking-wider text-slate-400">Revenue note</p>
+              <p className="mt-2 text-sm text-slate-300">
+                Subscriptions are charged in <span className="text-white">USD</span>. Ground bookings and product orders are
+                recorded in <span className="text-white">PKR</span> — totals are not mixed.
+              </p>
+            </AdminCard>
           </div>
 
           {d.health ? (

@@ -15,7 +15,7 @@ import { api, getErrorMessage } from '../../services/api';
 export default function PlayerCoaches() {
   const [list, setList] = useState([]);
   const [trainingRequests, setTrainingRequests] = useState([]);
-  const [generationMethod, setGenerationMethod] = useState('rules');
+  const [generationMethod, setGenerationMethod] = useState('ai');
   const [requestingCoachId, setRequestingCoachId] = useState(null);
   const [requestNote, setRequestNote] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
@@ -118,7 +118,7 @@ export default function PlayerCoaches() {
         api.get('/players/me/profile').catch(() => ({ data: { data: null } })),
       ]);
       setList(rec.data.data || []);
-      setGenerationMethod(rec.data.generationMethod || 'rules');
+      setGenerationMethod(rec.data.generationMethod || 'ai');
       setTrainingRequests(tr.data.data || []);
       setPlayerOrigin(playerLocationOrigin(profileRes.data?.data));
       setPlayerSport(profileRes.data?.data?.sportPreference || '');
@@ -164,7 +164,7 @@ export default function PlayerCoaches() {
         </p>
       ) : null}
       <p className="mb-3 text-xs uppercase tracking-[0.16em] text-player-on-variant/70">
-        Source: {generationMethod === 'ai' ? 'AI Recommended' : 'Rules Fallback'}
+        Source: {generationMethod === 'ai' ? 'AI matched to your profile' : 'Recommendations'}
       </p>
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
       {statusMsg ? <p className="mb-4 text-sm text-player-green">{statusMsg}</p> : null}

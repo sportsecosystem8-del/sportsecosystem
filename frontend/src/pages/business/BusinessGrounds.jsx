@@ -20,6 +20,9 @@ export default function BusinessGrounds() {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState('');
+
+  const isVerified = verificationStatus === 'verified';
 
   const load = () => {
     api
@@ -30,13 +33,16 @@ export default function BusinessGrounds() {
 
   useEffect(() => {
     load();
-    api
-      .get('/business/me/profile')
-      .then((r) => {
-        const p = r.data?.data;
+    Promise.all([
+      api.get('/business/me/profile'),
+      api.get('/auth/me').catch(() => ({ data: { data: null } })),
+    ])
+      .then(([profRes, meRes]) => {
+        const p = profRes.data?.data;
         setProfile(p);
         setLocation(p?.address || '');
         setCity('');
+        setVerificationStatus(meRes.data?.data?.verificationStatus || '');
       })
       .catch(() => {});
   }, []);
@@ -54,6 +60,10 @@ export default function BusinessGrounds() {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!isVerified) {
+      setErr('Admin must verify your business before you can list grounds.');
+      return;
+    }
     if (imagePaths.length < MIN_IMAGES) {
       setErr(`Upload at least ${MIN_IMAGES} ground photos.`);
       return;
@@ -102,9 +112,15 @@ export default function BusinessGrounds() {
       <div>
         <h1 className="font-display text-3xl tracking-[0.08em] text-white sm:text-4xl">MY GROUNDS</h1>
         <p className="mt-2 text-sm text-slate-400">
-          List your venue for online slot booking — free, separate from product listing subscription.
+          List your venue for online slot booking — requires admin verification (same as products).
         </p>
       </div>
+      {!isVerified ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          Your business is not verified yet. Complete documents and wait for admin approval before listing grounds.
+          Status: <span className="font-semibold capitalize">{verificationStatus || 'pending'}</span>
+        </p>
+      ) : null}
       {err ? <p className="text-sm text-red-400">{err}</p> : null}
       {msg ? <p className="text-sm text-emerald-300">{msg}</p> : null}
 
@@ -151,7 +167,7 @@ export default function BusinessGrounds() {
             ))}
           </div>
         </div>
-        <button type="submit" disabled={busy} className="rounded-lg bg-[#cc97ff] px-6 py-2.5 text-sm font-bold uppercase tracking-wider text-[#360061] disabled:opacity-50">
+        <button type="submit" disabled={busy || !isVerified} className="rounded-lg bg-[#cc97ff] px-6 py-2.5 text-sm font-bold uppercase tracking-wider text-[#360061] disabled:opacity-50">
           {busy ? 'Saving…' : 'List ground'}
         </button>
       </form>

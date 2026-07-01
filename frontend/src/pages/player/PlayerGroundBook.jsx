@@ -1,28 +1,44 @@
 import { useCallback, useEffect, useState } from 'react';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import PlayerCard from '../../components/player/PlayerCard';
-import { GroundVenueCard } from '../../components/GroundMedia';
+import { GroundBrowseCard } from '../../components/GroundMedia';
 import StripePaySection, { stripePublishableConfigured } from '../../components/payment/StripePaySection';
 import { playerField, playerLabel, playerSelect } from '../../components/player/playerClassNames';
 import { api, getErrorMessage } from '../../services/api';
 import { formatGroundBookingAmount } from '../../utils/groundBookingCurrency';
+import { findNearestAvailableSlot, formatSlotTimeRange } from '../../utils/groundSlots';
 import { playerGroundsSubtitle, sportFilterBadge } from '../../utils/sportDisplay';
 
 function downloadBookingReceipt(booking, ground) {
   const lines = [
     'SPORTS ECOSYSTEM — GROUND BOOKING CONFIRMATION',
     '==========================================',
-    `Booking ID: ${booking.confirmationToken || booking._id}`,
-    `Ground: ${ground?.name || '—'}`,
+    '',
+    'This document is your proof of booking. Present the reference at the venue.',
+    '',
+    `Reference: ${booking.confirmationToken || booking._id}`,
+    `Status: ${booking.status || 'confirmed'}`,
+    '',
+    'VENUE',
+    `Name: ${ground?.name || '—'}`,
     `Sport: ${ground?.sportType || '—'}`,
-    `When: ${new Date(booking.startTime).toLocaleString()} – ${new Date(booking.endTime).toLocaleTimeString()}`,
-    `Location: ${ground?.location || ground?.city || '—'}`,
-    `Guest: ${booking.guestName || '—'}`,
+    `Address: ${ground?.location || ground?.address || ground?.city || '—'}`,
+    `Rate: ${ground?.pricePerHour ? `PKR ${ground.pricePerHour}/hour` : '—'}`,
+    '',
+    'SLOT',
+    `Start: ${new Date(booking.startTime).toLocaleString()}`,
+    `End: ${new Date(booking.endTime).toLocaleString()}`,
+    `Amount: ${formatGroundBookingAmount(booking.amount)}`,
+    booking.paymentNote ? `Payment: ${booking.paymentNote}` : null,
+    '',
+    'GUEST',
+    `Name: ${booking.guestName || '—'}`,
     `Phone: ${booking.guestPhone || '—'}`,
     booking.guestAddress ? `Address: ${booking.guestAddress}` : null,
-    booking.paymentNote || `Amount: ${formatGroundBookingAmount(booking.amount)}`,
+    booking.guestCity ? `City: ${booking.guestCity}` : null,
     '',
-    'Present this reference at the venue.',
+    'Booked via Sports Ecosystem Platform — no phone call required.',
+    `Generated: ${new Date().toLocaleString()}`,
   ].filter(Boolean);
   const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
@@ -44,6 +60,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
   const [slotDate, setSlotDate] = useState('');
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [suggestedSlot, setSuggestedSlot] = useState(null);
   const [hold, setHold] = useState(null);
   const [guest, setGuest] = useState({ fullName: '', phone: '', address: '', city: '' });
   const [confirmed, setConfirmed] = useState(null);
@@ -75,21 +92,33 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
     loadGrounds();
   }, [loadGrounds]);
 
-  const loadSlots = async (groundId, date) => {
+  const loadSlots = useCallback(async (groundId, date, preferStart) => {
     if (!groundId || !date) return;
     setErr('');
     try {
-      const { data } = await api.get(`/public/grounds/${groundId}/slots`, { params: { date } });
-      setSlots(data.data?.slots || []);
+      const params = { date };
+      if (preferStart) params.preferStart = preferStart;
+      const { data } = await api.get(`/public/grounds/${groundId}/slots`, { params });
+      const list = data.data?.slots || [];
+      setSlots(list);
+      const nearest = data.data?.nearestAvailable || (preferStart ? findNearestAvailableSlot(list, preferStart) : null);
+      setSuggestedSlot(nearest);
     } catch (e) {
       setErr(getErrorMessage(e));
       setSlots([]);
+      setSuggestedSlot(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (selectedGround && slotDate) loadSlots(selectedGround._id, slotDate);
-  }, [selectedGround, slotDate]);
+    if (!selectedGround || !slotDate) return;
+    let preferStart;
+    if (filterDate && filterTime && slotDate === filterDate) {
+      const t = new Date(`${filterDate}T${filterTime}`);
+      if (!Number.isNaN(t.getTime())) preferStart = t.toISOString();
+    }
+    loadSlots(selectedGround._id, slotDate, preferStart);
+  }, [selectedGround, slotDate, filterDate, filterTime, loadSlots]);
 
   useEffect(() => {
     if (!hold?._id || !useStripe) {
@@ -126,6 +155,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
       setConfirmed({ booking: data.data, ground: selectedGround });
       setHold(null);
       setSelectedSlot(null);
+      setSuggestedSlot(null);
       setStripeClientSecret('');
       loadGrounds();
     } catch (e) {
@@ -160,6 +190,37 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
     }
   };
 
+  const pickSlot = (slot) => {
+    setHold(null);
+    if (!slot.available) {
+      const nearest = findNearestAvailableSlot(slots, slot.startTime);
+      setSuggestedSlot(nearest);
+      setSelectedSlot(null);
+      if (!nearest) setErr('This slot is booked and no other slots are available this day.');
+      return;
+    }
+    setErr('');
+    setSuggestedSlot(null);
+    setSelectedSlot(slot);
+  };
+
+  const acceptSuggestedSlot = () => {
+    if (!suggestedSlot?.available) return;
+    setErr('');
+    setSelectedSlot(suggestedSlot);
+    setSuggestedSlot(null);
+  };
+
+  const selectGround = (groundId) => {
+    const g = grounds.find((x) => x._id === groundId);
+    if (!g) return;
+    setSelectedGround(g);
+    setSlotDate(filterDate || '');
+    setSelectedSlot(null);
+    setSuggestedSlot(null);
+    setHold(null);
+  };
+
   const guestFieldsValid = guest.fullName.trim() && guest.phone.trim();
 
   const handleStripePaid = async (paymentIntentId) => {
@@ -170,10 +231,12 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
     await finalizeBooking(paymentIntentId);
   };
 
-
   return (
     <div className="space-y-8">
-      <PlayerPageHeader title="Book a ground" subtitle={playerGroundsSubtitle(sport)} />
+      <PlayerPageHeader
+        title="Book a ground"
+        subtitle={playerGroundsSubtitle(sport)}
+      />
       {sportFilterBadge(sport) ? (
         <p className="text-xs font-semibold uppercase tracking-wider text-player-green">
           {sportFilterBadge(sport)}
@@ -193,7 +256,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
             className="mt-4 rounded-lg bg-player-green/20 px-4 py-2 text-sm font-bold uppercase tracking-wider text-player-green"
             onClick={() => downloadBookingReceipt(confirmed.booking, confirmed.ground)}
           >
-            Download confirmation
+            Download confirmation proof
           </button>
           <button type="button" className="ml-3 mt-4 text-sm text-slate-400 underline" onClick={() => setConfirmed(null)}>
             Book another
@@ -221,24 +284,23 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
           <input className={playerField} type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} />
           <input className={playerField} type="time" value={filterTime} onChange={(e) => setFilterTime(e.target.value)} />
         </div>
-        <p className="mt-2 text-xs text-slate-500">Date + time filters show only grounds with a free slot at that hour.</p>
+        <p className="mt-2 text-xs text-slate-500">
+          Filter by sport, city, budget, and preferred date/time. Book online — no call required.
+        </p>
       </PlayerCard>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
-          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">Venues ({grounds.length})</h2>
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">
+            Venues ({grounds.length})
+          </h2>
           <ul className="mt-3 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
             {grounds.map((g) => (
               <li key={g._id}>
-                <GroundVenueCard
+                <GroundBrowseCard
                   ground={g}
                   selected={selectedGround?._id === g._id}
-                  onSelect={() => {
-                    setSelectedGround(g);
-                    setSlotDate(filterDate || '');
-                    setSelectedSlot(null);
-                    setHold(null);
-                  }}
+                  onSelect={selectGround}
                   accent="player"
                   mode="book"
                 />
@@ -252,8 +314,12 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
           {selectedGround ? (
             <PlayerCard className="p-5">
               <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">
-                {selectedGround.name} — slots
+                {selectedGround.name} — pick a slot
               </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {selectedGround.location || selectedGround.city || '—'} ·{' '}
+                {selectedGround.pricePerHour ? `PKR ${selectedGround.pricePerHour}/hr` : 'Ask rate'}
+              </p>
               <input
                 className={`${playerField} mt-3`}
                 type="date"
@@ -261,34 +327,49 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
                 onChange={(e) => {
                   setSlotDate(e.target.value);
                   setSelectedSlot(null);
+                  setSuggestedSlot(null);
                   setHold(null);
                 }}
               />
+              {suggestedSlot && !selectedSlot ? (
+                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-xs text-amber-100">
+                    Your preferred time is not available. Nearest open slot:{' '}
+                    <span className="font-semibold">{formatSlotTimeRange(suggestedSlot)}</span>
+                    {suggestedSlot.amount ? (
+                      <span> · {formatGroundBookingAmount(suggestedSlot.amount)}</span>
+                    ) : null}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={acceptSuggestedSlot}
+                    className="mt-2 text-xs font-bold uppercase tracking-wider text-amber-200 underline"
+                  >
+                    Use this slot
+                  </button>
+                </div>
+              ) : null}
               <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto">
                 {slots.map((slot) => (
                   <li key={slot.startTime}>
                     <button
                       type="button"
-                      disabled={!slot.available}
-                      onClick={() => {
-                        setSelectedSlot(slot);
-                        setHold(null);
-                      }}
+                      onClick={() => pickSlot(slot)}
                       className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
                         !slot.available
-                          ? 'border-red-500/20 bg-red-500/5 text-slate-500 line-through'
+                          ? 'border-red-500/20 bg-red-500/5 text-slate-500'
                           : selectedSlot?.startTime === slot.startTime
                             ? 'border-player-green bg-player-green/15 text-white'
                             : 'border-white/10 bg-player-inner/40 text-slate-200 hover:border-player-green/40'
                       }`}
                     >
-                      {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {' – '}
-                      {new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatSlotTimeRange(slot)}
                       {slot.available ? (
-                        <span className="ml-2 text-player-green">Available · {formatGroundBookingAmount(slot.amount)}</span>
+                        <span className="ml-2 text-player-green">
+                          Available · {formatGroundBookingAmount(slot.amount)}
+                        </span>
                       ) : (
-                        <span className="ml-2 text-red-400">Booked</span>
+                        <span className="ml-2 text-red-400">Booked — tap for nearest</span>
                       )}
                     </button>
                   </li>
@@ -309,7 +390,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
 
               {hold ? (
                 <form onSubmit={confirmBooking} className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                  <p className="text-xs text-amber-200">Slot held — complete details to confirm.</p>
+                  <p className="text-xs text-amber-200">Slot held — enter your details and confirm.</p>
                   <input
                     className={playerField}
                     required
@@ -365,7 +446,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
               ) : null}
             </PlayerCard>
           ) : (
-            <p className="text-sm text-slate-500">Select a venue to view available slots.</p>
+            <p className="text-sm text-slate-500">Select a venue to view available slots and book online.</p>
           )}
         </div>
       </div>

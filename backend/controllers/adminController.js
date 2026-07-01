@@ -62,9 +62,15 @@ const dashboard = asyncHandler(async (req, res) => {
     User.countDocuments({ role: 'admin' }),
   ]);
   const bookings = await GroundBooking.countDocuments({ status: 'confirmed' });
-  const revenue = await Payment.aggregate([
-    { $match: { status: 'completed' } },
-    { $group: { _id: null, total: { $sum: '$amount' } } },
+  const [subscriptionRev, localRev] = await Promise.all([
+    Payment.aggregate([
+      { $match: { status: 'completed', type: 'subscription' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]),
+    Payment.aggregate([
+      { $match: { status: 'completed', type: { $in: ['ground_booking', 'product', 'coach_fee'] } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]),
   ]);
   /** Dashboard health indicators */
   res.json({
@@ -72,7 +78,9 @@ const dashboard = asyncHandler(async (req, res) => {
     data: {
       users: { players, coaches, businesses, admins },
       bookingsConfirmed: bookings,
-      revenueTotal: revenue[0]?.total || 0,
+      revenueTotal: (subscriptionRev[0]?.total || 0) + (localRev[0]?.total || 0),
+      revenueSubscriptionUsd: subscriptionRev[0]?.total || 0,
+      revenueLocalPkr: localRev[0]?.total || 0,
       health: {
         database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
         uptimeSec: Math.floor(process.uptime()),

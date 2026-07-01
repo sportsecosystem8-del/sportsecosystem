@@ -28,7 +28,6 @@ const {
   validateScheduleSlots,
   normalizeSkillLevels,
   normalizeSports,
-  toMinutesOfDay,
 } = require('../utils/scheduleSlots');
 const {
   getStripe,
@@ -99,25 +98,6 @@ async function sessionConflicts(coachId, scheduledAt, excludeSessionId = null) {
 
 const SESSION_DURATION_MINUTES = 60;
 
-function fitsCoachAvailability(scheduledAt, availability) {
-  if (!Array.isArray(availability) || availability.length === 0) return { ok: true };
-  const at = new Date(scheduledAt);
-  if (Number.isNaN(at.getTime())) return { ok: false, message: 'Invalid schedule time.' };
-  const day = at.getDay();
-  const slotStart = at.getHours() * 60 + at.getMinutes();
-  const slotEnd = slotStart + SESSION_DURATION_MINUTES;
-  const found = availability.some((a) => {
-    if (a?.dayOfWeek !== day) return false;
-    const start = toMinutesOfDay(a.start);
-    const end = toMinutesOfDay(a.end);
-    if (start == null || end == null) return false;
-    return start <= slotStart && end >= slotEnd;
-  });
-  return found
-    ? { ok: true }
-    : { ok: false, message: 'Selected time is outside your published availability.' };
-}
-
 async function assertAcceptedStudent(coachId, playerId) {
   const accepted = await TrainingRequest.findOne({
     coach: coachId,
@@ -177,12 +157,6 @@ async function scheduleTrainingSession({
   }
 
   const cp = await CoachProfile.findOne({ user: coachId }).lean();
-  const availabilityCheck = fitsCoachAvailability(when, cp?.availability);
-  if (!availabilityCheck.ok) {
-    const err = new Error(availabilityCheck.message);
-    err.statusCode = 409;
-    throw err;
-  }
 
   const active = await TrainingSession.countDocuments({ coach: coachId, status: 'scheduled' });
   const cap = cp?.maxStudents ?? 40;
@@ -553,6 +527,7 @@ const updateProfile = asyncHandler(async (req, res) => {
     'preferredPlayerLevels',
     'availability',
     'monthlyTrainingFee',
+    'academyImageUrls',
   ];
   const patch = {};
   for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
@@ -586,6 +561,15 @@ const updateProfile = asyncHandler(async (req, res) => {
     const fee = Number(req.body.monthlyTrainingFee);
     patch.monthlyTrainingFee = Number.isFinite(fee) && fee >= 0 ? fee : 0;
   }
+  if (req.body.academyImageUrls !== undefined) {
+    if (!Array.isArray(req.body.academyImageUrls)) {
+      return res.status(400).json({ success: false, message: 'academyImageUrls must be an array of image paths.' });
+    }
+    patch.academyImageUrls = req.body.academyImageUrls
+      .map((u) => String(u || '').trim())
+      .filter((u) => u.startsWith('/uploads/'))
+      .slice(0, 12);
+  }
   const profile = await CoachProfile.findOneAndUpdate({ user: req.user.id }, patch, { new: true });
   if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
   res.json({ success: true, data: profile });
@@ -602,6 +586,38 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
   const profile = await CoachProfile.findOneAndUpdate(
     { user: req.user.id },
     { profilePhotoUrl: url },
+    { new: true }
+  );
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: profile });
+});
+
+const uploadAcademyPhoto = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
+    });
+  }
+  const url = `/uploads/${req.file.filename}`;
+  const profile = await CoachProfile.findOne({ user: req.user.id });
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  const urls = Array.isArray(profile.academyImageUrls) ? [...profile.academyImageUrls] : [];
+  if (urls.length >= 12) {
+    return res.status(400).json({ success: false, message: 'Maximum 12 academy photos allowed.' });
+  }
+  urls.push(url);
+  profile.academyImageUrls = urls;
+  await profile.save();
+  res.json({ success: true, data: profile });
+});
+
+const removeAcademyPhoto = asyncHandler(async (req, res) => {
+  const url = String(req.body?.url || '').trim();
+  if (!url) return res.status(400).json({ success: false, message: 'url is required' });
+  const profile = await CoachProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { $pull: { academyImageUrls: url } },
     { new: true }
   );
   if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
@@ -894,11 +910,6 @@ const updateTrainingSession = asyncHandler(async (req, res) => {
     }
     if (await sessionConflicts(req.user.id, when, session._id)) {
       return res.status(409).json({ success: false, message: 'Another session is within 90 minutes of this time.' });
-    }
-    const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
-    const availabilityCheck = fitsCoachAvailability(when, cp?.availability);
-    if (!availabilityCheck.ok) {
-      return res.status(409).json({ success: false, message: availabilityCheck.message });
     }
     patch.scheduledAt = when;
   }
@@ -1662,5 +1673,7 @@ module.exports = {
   listNotifications,
   uploadDocumentMeta,
   uploadProfilePhoto,
+  uploadAcademyPhoto,
+  removeAcademyPhoto,
   listDocuments,
 };

@@ -14,6 +14,8 @@ r.get('/me/profile', c.getProfile);
 r.put('/me/profile', c.updateProfile);
 r.put('/me/availability', c.updateAvailability);
 r.post('/me/profile-photo', uploadImage.single('image'), c.uploadProfilePhoto);
+r.post('/me/academy-photos', uploadImage.single('image'), c.uploadAcademyPhoto);
+r.delete('/me/academy-photos', [body('url').trim().notEmpty()], validateRequest, c.removeAcademyPhoto);
 r.get('/subscription/status', c.getCoachSubscriptionStatus);
 r.post(
   '/subscription/payment-intent',

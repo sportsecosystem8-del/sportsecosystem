@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import CoachAvatar from '../../components/CoachAvatar';
 import { coachField, coachLabel } from '../../components/coach/coachClassNames';
-import WeeklyScheduleEditor, {
+import WeeklyDaysTimeEditor from '../../components/shared/WeeklyDaysTimeEditor';
+import {
   MultiCheckboxGroup,
   SPORT_OPTIONS,
   SKILL_LEVEL_OPTIONS,
-  normalizeSlots,
 } from '../../components/shared/WeeklyScheduleEditor';
+import { publicAssetUrl } from '../../utils/assetUrl';
 import { api, getErrorMessage } from '../../services/api';
 
 export default function CoachProfile() {
@@ -24,7 +25,9 @@ export default function CoachProfile() {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadingAcademy, setUploadingAcademy] = useState(false);
   const [photoVersion, setPhotoVersion] = useState(0);
+  const [academyImageUrls, setAcademyImageUrls] = useState([]);
 
   const load = useCallback(() => {
     api
@@ -40,7 +43,8 @@ export default function CoachProfile() {
         setYearsExperience(p.yearsExperience ?? 0);
         setSpecialties(Array.isArray(p.specialties) ? p.specialties : []);
         setPreferredPlayerLevels(Array.isArray(p.preferredPlayerLevels) ? p.preferredPlayerLevels : []);
-        setAvailability(normalizeSlots(p.availability));
+        setAvailability(Array.isArray(p.availability) ? p.availability : []);
+        setAcademyImageUrls(Array.isArray(p.academyImageUrls) ? p.academyImageUrls : []);
         setMonthlyTrainingFee(p.monthlyTrainingFee ?? 0);
       })
       .catch((e) => setErr(getErrorMessage(e)));
@@ -72,6 +76,7 @@ export default function CoachProfile() {
         monthlyTrainingFee: Number.parseInt(monthlyTrainingFee, 10) || 0,
       });
       setProfile(data.data);
+      setAcademyImageUrls(data.data?.academyImageUrls || []);
       setMsg('Profile updated.');
     } catch (e) {
       setErr(getErrorMessage(e));
@@ -113,6 +118,43 @@ export default function CoachProfile() {
       }
     } finally {
       setUploading(false);
+    }
+  };
+
+  const onAcademyPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    setUploadingAcademy(true);
+    setErr('');
+    setMsg('');
+    try {
+      let latest = profile;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('image', file, file.name);
+        const { data } = await api.post('/coaches/me/academy-photos', fd);
+        latest = data.data;
+      }
+      setProfile(latest);
+      setAcademyImageUrls(latest?.academyImageUrls || []);
+      setMsg('Academy photos updated.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    } finally {
+      setUploadingAcademy(false);
+    }
+  };
+
+  const removeAcademyPhoto = async (url) => {
+    setErr('');
+    try {
+      const { data } = await api.delete('/coaches/me/academy-photos', { data: { url } });
+      setProfile(data.data);
+      setAcademyImageUrls(data.data?.academyImageUrls || []);
+      setMsg('Photo removed.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
     }
   };
 
@@ -179,8 +221,44 @@ export default function CoachProfile() {
           required
         />
         <p className="text-[10px] uppercase tracking-wider text-slate-500">
-          Players see your academy address and map link on coach match cards.
+          Players see your academy address, map link, and facility photos on your public profile.
         </p>
+
+        <div className="space-y-2 border-t border-white/[0.06] pt-6">
+          <p className={coachLabel}>Academy photos</p>
+          <p className="text-xs text-slate-500">Upload photos of your academy, courts, or training facility (up to 12).</p>
+          <label className="inline-block cursor-pointer rounded-lg border border-[#ff7524]/40 px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#ff7524] hover:bg-[#ff7524]/10">
+            {uploadingAcademy ? 'Uploading…' : 'Add photos'}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              onChange={onAcademyPhotos}
+              disabled={uploadingAcademy}
+            />
+          </label>
+          {academyImageUrls.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {academyImageUrls.map((url) => (
+                <div key={url} className="relative">
+                  <img src={publicAssetUrl(url)} alt="" className="h-20 w-20 rounded-lg object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeAcademyPhoto(url)}
+                    className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-[10px] text-white"
+                    aria-label="Remove photo"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-600">No academy photos yet.</p>
+          )}
+        </div>
+
         <textarea
           className="h-28 w-full border-b-2 border-player-inner bg-player-bg px-3 py-2 text-sm text-white outline-none focus:border-[#ff7524]"
           placeholder="Bio"
@@ -242,14 +320,15 @@ export default function CoachProfile() {
         <div className="space-y-2 border-t border-white/[0.06] pt-6">
           <p className={coachLabel}>Weekly availability</p>
           <p className="text-xs text-slate-500">
-            Add the days and times you are available. Player recommendations and session booking use these slots.
+            Pick the days you usually train and one time window. This helps match you with players — you can still
+            schedule sessions outside these hours.
           </p>
-          <WeeklyScheduleEditor
+          <WeeklyDaysTimeEditor
             slots={availability}
             onChange={setAvailability}
             fieldClass={coachField}
-            addButtonClass="rounded-lg border border-[#ff7524]/40 px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#ff7524] transition hover:bg-[#ff7524]/10"
-            emptyHint="No availability set yet — add your weekly training windows."
+            accentClass="text-[#ff7524]"
+            emptyHint="Select your usual training days and set one weekly time."
           />
         </div>
 

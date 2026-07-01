@@ -3,7 +3,7 @@ const Product = require('../models/Product');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { verifiedBusinessOwnerIds } = require('../utils/verifiedSellers');
 const { hasOverlap } = require('../utils/groundBookings');
-const { slotsForGroundOnDay } = require('../utils/groundSlots');
+const { slotsForGroundOnDay, findNearestAvailableSlot } = require('../utils/groundSlots');
 
 const listGrounds = asyncHandler(async (req, res) => {
   const filter = { isActive: true };
@@ -80,6 +80,11 @@ const listGroundDaySlots = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Query param date (YYYY-MM-DD) is required' });
   }
   const slots = await slotsForGroundOnDay(ground, date);
+  const preferStart = req.query.preferStart;
+  const nearestAvailable =
+    preferStart && String(preferStart).trim()
+      ? findNearestAvailableSlot(slots, String(preferStart).trim())
+      : null;
   res.json({
     success: true,
     data: {
@@ -90,6 +95,7 @@ const listGroundDaySlots = asyncHandler(async (req, res) => {
       closeTime: ground.closeTime,
       pricePerHour: ground.pricePerHour,
       slots,
+      nearestAvailable,
     },
   });
 });

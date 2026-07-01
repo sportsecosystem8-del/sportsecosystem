@@ -7,6 +7,8 @@ const coachProfileSchema = new mongoose.Schema(
     fullName: { type: String, required: true, trim: true },
     /** Public coach headshot — JPG/PNG via POST /coaches/me/profile-photo */
     profilePhotoUrl: String,
+    /** Academy / facility photos shown on public coach profile */
+    academyImageUrls: [{ type: String, trim: true }],
     phone: String,
     specialties: [{ type: String, enum: ['cricket', 'football', 'badminton'] }],
     /** Player skill levels this coach prefers to train */

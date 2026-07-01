@@ -72,6 +72,40 @@ function slotsToMinuteRanges(slots) {
     .filter(Boolean);
 }
 
+/** Collapse stored slots into selected weekdays + one shared time window */
+function collapseSlotsToWeeklyPattern(slots) {
+  const normalized = normalizeScheduleSlots(slots);
+  if (!normalized.length) {
+    return { days: [], start: '16:00', end: '18:00' };
+  }
+  const days = [...new Set(normalized.map((s) => s.dayOfWeek))].sort((a, b) => a - b);
+  const start = normalized[0].start;
+  const end = normalized[0].end;
+  return { days, start, end };
+}
+
+/** Expand weekday checkboxes + shared time into schedule slot rows */
+function expandWeeklyDaysTime({ days, start, end }) {
+  if (!Array.isArray(days) || !days.length) return [];
+  const s = normalizeTimeText(start);
+  const e = normalizeTimeText(end);
+  if (!s || !e) return [];
+  const startMin = toMinutesOfDay(s);
+  const endMin = toMinutesOfDay(e);
+  if (startMin == null || endMin == null || endMin <= startMin) return [];
+  const uniqueDays = [...new Set(days.map((d) => Number.parseInt(d, 10)).filter((d) => d >= 0 && d <= 6))];
+  return uniqueDays.map((dayOfWeek) => ({ dayOfWeek, start: s, end: e }));
+}
+
+function uniqueDaysFromSlots(slots) {
+  if (!Array.isArray(slots)) return new Set();
+  return new Set(
+    slots
+      .map((s) => Number.parseInt(s?.dayOfWeek, 10))
+      .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+  );
+}
+
 module.exports = {
   SKILL_LEVELS,
   SPORTS,
@@ -81,4 +115,7 @@ module.exports = {
   normalizeSkillLevels,
   normalizeSports,
   slotsToMinuteRanges,
+  collapseSlotsToWeeklyPattern,
+  expandWeeklyDaysTime,
+  uniqueDaysFromSlots,
 };

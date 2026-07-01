@@ -583,6 +583,14 @@ const listMyGrounds = asyncHandler(async (req, res) => {
 });
 
 const createBusinessGround = asyncHandler(async (req, res) => {
+  const owner = await User.findById(req.user.id).lean();
+  if (!owner) return res.status(404).json({ success: false, message: 'User not found' });
+  if (owner.verificationStatus !== 'verified') {
+    return res.status(403).json({
+      success: false,
+      message: 'Your business must be approved by admin before listing grounds.',
+    });
+  }
   const bp = await BusinessProfile.findOne({ user: req.user.id }).lean();
   if (!bp) return res.status(404).json({ success: false, message: 'Business profile not found' });
 
@@ -643,7 +651,7 @@ const listBusinessGroundBookings = asyncHandler(async (req, res) => {
     ground: { $in: groundIds },
     status: { $in: ['held', 'confirmed'] },
   })
-    .populate('ground', 'name sportType city pricePerHour')
+    .populate('ground', 'name sportType city location address pricePerHour openTime closeTime')
     .sort({ startTime: -1 })
     .lean();
   res.json({ success: true, data: list });
