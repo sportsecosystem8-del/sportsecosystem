@@ -3,17 +3,16 @@ import PlayerIcon from './PlayerIcon';
 import { statusBadge } from './playerClassNames';
 import { coachAcademyLabel, coachDirectionsUrl, coachMapUrl } from '../../utils/coachLocation';
 
-/** Matches coach session spacing rule (90 min). */
-export const SESSION_DURATION_MS = 90 * 60 * 1000;
-
-function formatTime(d) {
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+/** Matches coach session duration (minutes). */
+export function sessionDurationMs(session) {
+  const mins = session?.durationMinutes ?? 60;
+  return mins * 60 * 1000;
 }
 
-export function sessionWindow(scheduledAt) {
+export function sessionWindow(scheduledAt, durationMinutes = 60) {
   const start = new Date(scheduledAt);
   if (Number.isNaN(start.getTime())) return null;
-  const end = new Date(start.getTime() + SESSION_DURATION_MS);
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
   return { start, end };
 }
 
@@ -21,6 +20,10 @@ export function sessionVenueLabel(session) {
   const custom = String(session?.location || '').trim();
   if (custom) return custom;
   return coachAcademyLabel(session?.coach?.coachProfile) || 'Location TBD';
+}
+
+function formatTime(d) {
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 function MetaLine({ icon, children }) {
@@ -35,7 +38,7 @@ function MetaLine({ icon, children }) {
 export default function PlayerSessionCard({ session, playerOrigin, compact = false, showAttendance = false }) {
   const coachProfile = session.coach?.coachProfile;
   const coachName = coachProfile?.fullName || session.coach?.email || 'Coach';
-  const window = sessionWindow(session.scheduledAt);
+  const window = sessionWindow(session.scheduledAt, session.durationMinutes ?? 60);
   const venue = sessionVenueLabel(session);
   const mapUrl = coachMapUrl(coachProfile);
   const directionsUrl = coachDirectionsUrl(coachProfile, playerOrigin);
@@ -92,7 +95,7 @@ export default function PlayerSessionCard({ session, playerOrigin, compact = fal
           <MetaLine icon="calendar_today">
             {dateLine} · {formatTime(start)} – {formatTime(end)}
           </MetaLine>
-          <MetaLine icon="timelapse">90 min session</MetaLine>
+          <MetaLine icon="timelapse">{session.durationMinutes ?? 60} min session</MetaLine>
           <MetaLine icon="location_on">{venue}</MetaLine>
         </div>
 

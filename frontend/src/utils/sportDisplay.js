@@ -4,7 +4,6 @@ export function sportDisplayLabel(sport) {
   if (!sport) return 'Sport';
   const s = String(sport).toLowerCase();
   if (s === 'badminton') return 'Badminton';
-  if (s === 'football') return 'Football';
   if (s === 'cricket') return 'Cricket';
   if (s === 'general') return 'General';
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -13,7 +12,6 @@ export function sportDisplayLabel(sport) {
 export function sportMaterialIcon(sport) {
   const s = String(sport || '').toLowerCase();
   if (s === 'badminton') return 'sports_tennis';
-  if (s === 'football') return 'sports_soccer';
   return 'sports_cricket';
 }
 
@@ -41,7 +39,6 @@ export function sportFilterBadge(sport) {
 export function playerHeaderIcons(sport) {
   const icon = sportMaterialIcon(sport);
   if (icon === 'sports_tennis') return ['sports_tennis', 'sports_tennis'];
-  if (icon === 'sports_soccer') return ['sports_soccer', 'sports_soccer'];
   return ['sports_cricket', 'sports_tennis'];
 }
 

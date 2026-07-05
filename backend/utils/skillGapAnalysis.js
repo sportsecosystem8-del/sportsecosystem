@@ -26,12 +26,6 @@ const DRILL_HINTS = {
     'Defensive block': 'Dead-bat defensive sets vs good length, soft hands',
     'Slip catching': 'Reaction catches, first-slip angle, soft hands repeat',
   },
-  football: {
-    'First touch (ground)': 'Wall passes, cone receive-and-turn, weak foot touches',
-    'Through ball': 'Timing runs with partner, weight of pass progression',
-    '1v1 defending': 'Body shape, delay, force wide, no diving in early',
-    'Power shot': 'Striking technique, plant foot, follow-through to goal',
-  },
   badminton: {
     Smash: 'Jump timing, racket head speed, steep angle targets',
     'Net kill': 'Fast wrist, tight net tape, kill placement',

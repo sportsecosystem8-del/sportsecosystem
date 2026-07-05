@@ -13,6 +13,7 @@
     "seed:admin:reset": "node scripts/seedAdmin.js --reset-password",
     "wipe:database": "node scripts/wipeDatabase.js",
     "wipe:db": "node scripts/wipeDatabase.js",
+    "start:cluster": "pm2 start ../ecosystem.config.js",
     "test": "jest --forceExit"
   },
   "engines": {

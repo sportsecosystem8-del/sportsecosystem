@@ -11,6 +11,7 @@ function formatLabel(value) {
 }
 
 function paymentMethodLabel(method) {
+  if (method === 'easypaisa') return 'Easypaisa (paid to you)';
   if (method === 'cod') return 'Cash on delivery';
   if (method === 'stripe') return 'Card (Stripe)';
   if (method === 'mock') return 'Mock payment';

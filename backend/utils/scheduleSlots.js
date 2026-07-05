@@ -1,5 +1,5 @@
 const SKILL_LEVELS = ['beginner', 'intermediate', 'advanced'];
-const SPORTS = ['cricket', 'football', 'badminton'];
+const SPORTS = ['cricket', 'badminton'];
 
 function toMinutesOfDay(timeText) {
   if (!timeText || typeof timeText !== 'string' || !timeText.includes(':')) return null;

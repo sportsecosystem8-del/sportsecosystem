@@ -6,6 +6,8 @@ const trainingSessionSchema = new mongoose.Schema(
     player: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     trainingRequest: { type: mongoose.Schema.Types.ObjectId, ref: 'TrainingRequest' },
     scheduledAt: { type: Date, required: true },
+    /** Session length in minutes */
+    durationMinutes: { type: Number, default: 60, min: 15, max: 240 },
     location: String,
     groundBooking: { type: mongoose.Schema.Types.ObjectId, ref: 'GroundBooking' },
     status: {

@@ -27,6 +27,7 @@ r.post('/subscription', c.subscribeCoachPlatform);
 r.post('/subscription/renew', c.renewCoachPlatform);
 r.post('/documents', upload.single('file'), c.uploadDocumentMeta);
 r.get('/documents', c.listDocuments);
+r.get('/documents/:docId/file', [param('docId').isMongoId()], validateRequest, c.streamOwnDocumentFile);
 r.get('/notifications', c.listNotifications);
 r.get('/dashboard', c.getDashboard);
 
@@ -44,14 +45,29 @@ r.patch(
   validateRequest,
   c.updateTrainingRequest
 );
-r.post('/training-requests/:id/mark-fees-cleared', [param('id').isMongoId()], validateRequest, c.markTrainingFeesCleared);
-r.post('/training-requests/:id/start-session', [param('id').isMongoId()], validateRequest, c.startTrainingFromRequest);
+r.post(
+  '/training-requests/:id/mark-fees-cleared',
+  [param('id').isMongoId(), body('coachRollNo').optional().trim().isLength({ min: 1, max: 32 })],
+  validateRequest,
+  c.markTrainingFeesCleared
+);
+r.post(
+  '/training-requests/:id/start-session',
+  [
+    param('id').isMongoId(),
+    body('scheduledAt').isISO8601().withMessage('Training session date and time required'),
+    body('durationMinutes').optional().isInt({ min: 15, max: 240 }),
+  ],
+  validateRequest,
+  c.startTrainingFromRequest
+);
 r.get('/training-sessions', c.listTrainingSessions);
 r.post(
   '/training-sessions',
   [
     body('playerId').isMongoId().withMessage('Valid player id required'),
     body('scheduledAt').isISO8601().withMessage('Valid schedule time required'),
+    body('durationMinutes').optional().isInt({ min: 15, max: 240 }),
     body('location').optional().trim(),
   ],
   validateRequest,
@@ -62,6 +78,7 @@ r.patch(
   [
     param('id').isMongoId(),
     body('scheduledAt').optional().isISO8601(),
+    body('durationMinutes').optional().isInt({ min: 15, max: 240 }),
     body('location').optional().trim(),
   ],
   validateRequest,
@@ -122,7 +139,7 @@ r.post(
   validateRequest,
   c.holdGroundBooking
 );
-r.post('/ground-bookings/:id/payment-intent', c.createGroundBookingPaymentIntent);
+r.post('/ground-bookings/:id/easypaisa/initiate', [param('id').isMongoId()], validateRequest, c.initiateGroundEasypaisaPayment);
 r.post('/ground-bookings/:id/confirm-payment', c.confirmGroundPayment);
 r.get('/ground-bookings', c.listCoachGroundBookings);
 r.delete('/ground-bookings/:id', c.cancelGroundBooking);

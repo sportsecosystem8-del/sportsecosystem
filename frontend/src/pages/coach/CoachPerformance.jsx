@@ -219,6 +219,14 @@ export default function CoachPerformance() {
           <div className="flex flex-col justify-end">
             {selectedStudent ? (
               <p className="rounded border border-[#ff7524]/30 bg-[#ff7524]/5 px-3 py-2 text-xs text-slate-300">
+                Evaluating:{' '}
+                <span className="font-semibold text-white">{selectedStudent.fullName}</span>
+                {selectedStudent.coachRollNo ? (
+                  <span className="ml-2 font-orbitron text-[#ff7524]">#{selectedStudent.coachRollNo}</span>
+                ) : (
+                  <span className="ml-2 text-amber-300">(no roll no yet)</span>
+                )}
+                {' · '}
                 Rubric:{' '}
                 <span className="font-headline uppercase tracking-wider text-[#ff7524]">
                   {sportLabel(selectedStudent.sportPreference)}

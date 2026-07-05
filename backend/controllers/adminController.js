@@ -17,6 +17,7 @@ const { parseGroundImagePaths, sanitizeGroundPayload, validateGroundImages } = r
 const VerificationDocument = require('../models/VerificationDocument');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendVerificationApprovedEmail } = require('../utils/verificationEmails');
+const { queueEmail } = require('../utils/asyncEmail');
 const { notifyUser } = require('../utils/notify');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
 const { isMailerConfigured } = require('../utils/mailer');
@@ -125,11 +126,13 @@ const patchCoachVerification = asyncHandler(async (req, res) => {
   await notifyUser(user._id, { title, body, category: 'verification' });
   if (action === 'approve') {
     const profile = await CoachProfile.findOne({ user: user._id }).lean();
-    await sendVerificationApprovedEmail({
-      email: user.email,
-      role: 'coach',
-      fullName: profile?.fullName,
-    });
+    queueEmail(() =>
+      sendVerificationApprovedEmail({
+        email: user.email,
+        role: 'coach',
+        fullName: profile?.fullName,
+      })
+    );
   }
   res.json({ success: true, data: user, message: 'User notified in-app.' });
 });
@@ -206,11 +209,13 @@ const patchBusinessVerification = asyncHandler(async (req, res) => {
   await notifyUser(user._id, { title, body, category: 'verification' });
   if (action === 'approve') {
     const profile = await BusinessProfile.findOne({ user: user._id }).lean();
-    await sendVerificationApprovedEmail({
-      email: user.email,
-      role: 'business_owner',
-      fullName: profile?.businessName,
-    });
+    queueEmail(() =>
+      sendVerificationApprovedEmail({
+        email: user.email,
+        role: 'business_owner',
+        fullName: profile?.businessName,
+      })
+    );
   }
   res.json({ success: true, data: user, message: 'User notified in-app.' });
 });

@@ -10,9 +10,13 @@ const coachProfileSchema = new mongoose.Schema(
     /** Academy / facility photos shown on public coach profile */
     academyImageUrls: [{ type: String, trim: true }],
     phone: String,
-    specialties: [{ type: String, enum: ['cricket', 'football', 'badminton'] }],
+    specialties: [{ type: String, enum: ['cricket', 'badminton'] }],
     /** Player skill levels this coach prefers to train */
     preferredPlayerLevels: [{ type: String, enum: ['beginner', 'intermediate', 'advanced'] }],
+    /** Cricket coaching focus — used for category-wise player recommendations */
+    coachingCategories: [{ type: String, enum: ['batsman', 'bowler', 'allrounder'] }],
+    /** Default training session length in minutes */
+    defaultSessionDurationMinutes: { type: Number, default: 60, min: 15, max: 240 },
     academyLocation: String,
     city: String,
     bio: String,

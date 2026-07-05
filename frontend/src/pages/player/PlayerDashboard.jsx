@@ -176,11 +176,7 @@ export default function PlayerDashboard() {
     ? me.playerProfile.sportPreference.charAt(0).toUpperCase() + me.playerProfile.sportPreference.slice(1)
     : 'Sport';
   const sportIcon =
-    me?.playerProfile?.sportPreference === 'badminton'
-      ? 'sports_tennis'
-      : me?.playerProfile?.sportPreference === 'football'
-        ? 'sports_soccer'
-        : 'sports_cricket';
+    me?.playerProfile?.sportPreference === 'badminton' ? 'sports_tennis' : 'sports_cricket';
   const levelLabel = me?.playerProfile?.skillLevel
     ? me.playerProfile.skillLevel.charAt(0).toUpperCase() + me.playerProfile.skillLevel.slice(1)
     : 'Level';

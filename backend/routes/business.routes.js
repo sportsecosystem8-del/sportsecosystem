@@ -1,8 +1,8 @@
 const { Router } = require('express');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const b = require('../controllers/businessController');
 const { authenticate, requireRole, loadUser } = require('../middleware/auth');
-const { upload } = require('../middleware/upload');
+const { upload, uploadImage } = require('../middleware/upload');
 const { validateRequest } = require('../middleware/validate');
 
 const r = Router();
@@ -26,6 +26,8 @@ r.put(
   b.changeSubscription
 );
 r.put('/store', b.updateStore);
+r.post('/store/logo', uploadImage.single('image'), b.uploadStoreLogo);
+r.post('/store/banner', uploadImage.single('image'), b.uploadStoreBanner);
 r.get('/products', b.listMyProducts);
 r.post('/products', b.addProduct);
 r.put('/products/:id', b.updateProduct);
@@ -51,6 +53,7 @@ r.post('/coaches/:coachId/partnership', [body('message').notEmpty()], b.sendPart
 r.get('/notifications', b.listNotifications);
 r.post('/documents', upload.single('file'), b.uploadBusinessDoc);
 r.get('/documents', b.listBusinessDocs);
+r.get('/documents/:docId/file', [param('docId').isMongoId()], validateRequest, b.streamOwnBusinessDocumentFile);
 r.get('/grounds', b.listMyGrounds);
 r.post('/grounds', b.createBusinessGround);
 r.put('/grounds/:id', b.updateBusinessGround);

@@ -10,7 +10,6 @@ export const WEEKDAY_OPTIONS = [
 
 export const SPORT_OPTIONS = [
   { value: 'cricket', label: 'Cricket' },
-  { value: 'football', label: 'Football' },
   { value: 'badminton', label: 'Badminton' },
 ];
 

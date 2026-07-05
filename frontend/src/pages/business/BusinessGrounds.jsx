@@ -112,7 +112,11 @@ export default function BusinessGrounds() {
       <div>
         <h1 className="font-display text-3xl tracking-[0.08em] text-white sm:text-4xl">MY GROUNDS</h1>
         <p className="mt-2 text-sm text-slate-400">
-          List your venue for online slot booking — requires admin verification (same as products).
+          List your venue for online slot booking — requires admin verification and a linked{' '}
+          <a href="/business/payment" className="text-[#cc97ff] underline">
+            Easypaisa payment account
+          </a>
+          .
         </p>
       </div>
       {!isVerified ? (

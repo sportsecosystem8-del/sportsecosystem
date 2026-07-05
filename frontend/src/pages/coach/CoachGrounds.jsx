@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import GroundDirectoryView from '../../components/GroundDirectoryView';
+import CoachGroundBook from './CoachGroundBook';
 import { coachSelect } from '../../components/coach/coachClassNames';
 import { coachGroundsSubtitle } from '../../utils/sportDisplay';
 import { api } from '../../services/api';
@@ -18,13 +19,17 @@ export default function CoachGrounds() {
   }, []);
 
   return (
-    <GroundDirectoryView
-      key={defaultSport || 'all'}
-      accent="coach"
-      title="Indoor grounds"
-      subtitle={coachGroundsSubtitle(defaultSport)}
-      selectClassName={coachSelect}
-      defaultSport={defaultSport}
-    />
+    <div>
+      <GroundDirectoryView
+        key={defaultSport || 'all'}
+        accent="coach"
+        title="Indoor grounds"
+        subtitle={coachGroundsSubtitle(defaultSport)}
+        selectClassName={coachSelect}
+        defaultSport={defaultSport}
+        bookingHint
+      />
+      <CoachGroundBook defaultSport={defaultSport} />
+    </div>
   );
 }

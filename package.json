@@ -9,6 +9,7 @@
     "wipe:db": "npm run wipe:database --prefix backend",
     "backend": "npm run dev --prefix backend",
     "backend:start": "npm start --prefix backend",
+    "backend:cluster": "npm run start:cluster --prefix backend",
     "frontend": "npm run dev --prefix frontend",
     "frontend:build": "npm run build --prefix frontend",
     "frontend:lint": "npm run lint --prefix frontend",

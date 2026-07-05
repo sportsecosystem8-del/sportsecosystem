@@ -10,6 +10,12 @@ import {
 import { publicAssetUrl } from '../../utils/assetUrl';
 import { api, getErrorMessage } from '../../services/api';
 
+const COACHING_CATEGORY_OPTIONS = [
+  { value: 'batsman', label: 'Batting coach' },
+  { value: 'bowler', label: 'Bowling coach' },
+  { value: 'allrounder', label: 'All-rounder coach' },
+];
+
 export default function CoachProfile() {
   const [profile, setProfile] = useState(null);
   const [fullName, setFullName] = useState('');
@@ -20,6 +26,8 @@ export default function CoachProfile() {
   const [yearsExperience, setYearsExperience] = useState(0);
   const [specialties, setSpecialties] = useState([]);
   const [preferredPlayerLevels, setPreferredPlayerLevels] = useState([]);
+  const [coachingCategories, setCoachingCategories] = useState([]);
+  const [defaultSessionDurationMinutes, setDefaultSessionDurationMinutes] = useState(60);
   const [availability, setAvailability] = useState([]);
   const [monthlyTrainingFee, setMonthlyTrainingFee] = useState(0);
   const [err, setErr] = useState('');
@@ -43,6 +51,8 @@ export default function CoachProfile() {
         setYearsExperience(p.yearsExperience ?? 0);
         setSpecialties(Array.isArray(p.specialties) ? p.specialties : []);
         setPreferredPlayerLevels(Array.isArray(p.preferredPlayerLevels) ? p.preferredPlayerLevels : []);
+        setCoachingCategories(Array.isArray(p.coachingCategories) ? p.coachingCategories : []);
+        setDefaultSessionDurationMinutes(p.defaultSessionDurationMinutes ?? 60);
         setAvailability(Array.isArray(p.availability) ? p.availability : []);
         setAcademyImageUrls(Array.isArray(p.academyImageUrls) ? p.academyImageUrls : []);
         setMonthlyTrainingFee(p.monthlyTrainingFee ?? 0);
@@ -72,6 +82,8 @@ export default function CoachProfile() {
         yearsExperience: Number.parseInt(yearsExperience, 10) || 0,
         specialties,
         preferredPlayerLevels,
+        coachingCategories,
+        defaultSessionDurationMinutes: Number.parseInt(defaultSessionDurationMinutes, 10) || 60,
         availability,
         monthlyTrainingFee: Number.parseInt(monthlyTrainingFee, 10) || 0,
       });
@@ -273,6 +285,33 @@ export default function CoachProfile() {
             values={specialties}
             onChange={setSpecialties}
             accentClass="text-[#ff7524]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <p className={coachLabel}>Coaching focus (cricket)</p>
+          <p className="text-xs text-slate-500">Batsmen see batting coaches, bowlers see bowling coaches, etc.</p>
+          <MultiCheckboxGroup
+            options={COACHING_CATEGORY_OPTIONS}
+            values={coachingCategories}
+            onChange={setCoachingCategories}
+            accentClass="text-[#ff7524]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className={coachLabel} htmlFor="coach-session-duration">
+            Default session length (minutes)
+          </label>
+          <input
+            id="coach-session-duration"
+            type="number"
+            min={15}
+            max={240}
+            step={15}
+            className={coachField}
+            value={defaultSessionDurationMinutes}
+            onChange={(e) => setDefaultSessionDurationMinutes(e.target.value)}
           />
         </div>
 

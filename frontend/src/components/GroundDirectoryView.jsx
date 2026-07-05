@@ -18,6 +18,7 @@ export default function GroundDirectoryView({
 }) {
   const [grounds, setGrounds] = useState([]);
   const [sport, setSport] = useState(defaultSport || '');
+  const sportLocked = Boolean(defaultSport);
   const [city, setCity] = useState('');
   const [location, setLocation] = useState('');
   const [minPrice, setMinPrice] = useState('');
@@ -80,8 +81,13 @@ export default function GroundDirectoryView({
       ) : null}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <select className={selectClassName || inputCls} value={sport} onChange={(e) => setSport(e.target.value)}>
-          <option value="">All sports</option>
+        <select
+          className={selectClassName || inputCls}
+          value={sport}
+          onChange={(e) => setSport(e.target.value)}
+          disabled={sportLocked}
+        >
+          {!sportLocked ? <option value="">All sports</option> : null}
           <option value="cricket">Cricket</option>
           <option value="badminton">Badminton</option>
         </select>

@@ -25,6 +25,9 @@ const businessProfileSchema = new mongoose.Schema(
     storeBannerUrl: String,
     shippingPolicyText: String,
     returnPolicyText: String,
+    /** Easypaisa mobile account (03XXXXXXXXX) — receives ground & product payments */
+    easypaisaMobile: { type: String, trim: true },
+    easypaisaAccountTitle: { type: String, trim: true },
   },
   { timestamps: true }
 );

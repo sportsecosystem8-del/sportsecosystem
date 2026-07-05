@@ -63,65 +63,6 @@ const EVALUATION_RUBRICS = {
       },
     ],
   },
-  football: {
-    sport: 'football',
-    label: 'Football',
-    categories: [
-      {
-        name: 'Ball control',
-        skills: [
-          'First touch (ground)',
-          'First touch (aerial)',
-          'Dribbling (1v1)',
-          'Close control in tight spaces',
-          'Weak foot control',
-        ],
-      },
-      {
-        name: 'Passing',
-        skills: [
-          'Short pass accuracy',
-          'Long pass / switch play',
-          'Through ball',
-          'Cross (early / cut-back)',
-          'One-touch passing',
-        ],
-      },
-      {
-        name: 'Shooting',
-        skills: [
-          'Power shot',
-          'Placement (far / near post)',
-          'Volley / half-volley',
-          'Weak foot shooting',
-          'Heading (attacking)',
-        ],
-      },
-      {
-        name: 'Defending',
-        skills: [
-          'Standing tackle',
-          'Slide tackle (timing)',
-          '1v1 defending',
-          'Aerial duels',
-          'Interceptions / reading play',
-        ],
-      },
-      {
-        name: 'Goalkeeping',
-        skills: ['Shot stopping', 'Cross claiming', 'Distribution (throw / kick)', '1v1 saves'],
-      },
-      {
-        name: 'Physical & mental',
-        skills: [
-          'Speed / acceleration',
-          'Agility / change of direction',
-          'Work rate / pressing',
-          'Attitude & communication',
-        ],
-      },
-    ],
-  },
   badminton: {
     sport: 'badminton',
     label: 'Badminton',

@@ -15,7 +15,7 @@ const performanceEvaluationSchema = new mongoose.Schema(
     player: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     weekStartDate: { type: Date, required: true },
     /** Player sport at evaluation time */
-    sport: { type: String, enum: ['cricket', 'football', 'badminton'], default: 'cricket' },
+    sport: { type: String, enum: ['cricket', 'badminton'], default: 'cricket' },
     /** Deep sub-technique scores */
     skillScores: [skillScoreSchema],
     /** Per-category averages (Batting, Passing, etc.) */

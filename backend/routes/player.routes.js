@@ -12,7 +12,7 @@ r.put(
   '/me/profile',
   [
     body('fullName').optional().trim(),
-    body('sportPreference').optional().isIn(['cricket', 'football', 'badminton']),
+    body('sportPreference').optional().isIn(['cricket', 'badminton']),
     body('skillLevel').optional().isIn(['beginner', 'intermediate', 'advanced']),
     body('playerCategory').optional().isIn(['batsman', 'bowler', 'allrounder']),
   ],
@@ -33,13 +33,14 @@ r.post(
   [body('groundId').notEmpty(), body('startTime').notEmpty(), body('endTime').notEmpty()],
   p.holdGroundBooking
 );
-r.post('/ground-bookings/:id/payment-intent', p.createGroundBookingPaymentIntent);
+r.post('/ground-bookings/:id/easypaisa/initiate', p.initiateGroundEasypaisaPayment);
 r.post('/ground-bookings/:id/confirm-payment', p.confirmGroundPayment);
 r.get('/ground-bookings', p.listMyGroundBookings);
 r.delete('/ground-bookings/:id', p.cancelGroundBooking);
 r.get('/performance', p.getPerformance);
 r.get('/products', p.browseProducts);
-r.post('/orders/payment-intent', p.createOrderPaymentIntent);
+r.get('/stores/:ownerId', p.getBusinessStore);
+r.post('/orders/easypaisa/initiate', p.initiateOrderEasypaisaPayment);
 r.post('/orders', p.createOrder);
 r.get('/orders', p.listMyOrders);
 r.post('/coaches/:coachId/feedback', [body('rating').isInt({ min: 1, max: 5 })], p.submitCoachFeedback);

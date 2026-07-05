@@ -17,6 +17,11 @@ function StudentCard({ student, evalScore }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-display text-xl tracking-wide text-white">{student.fullName}</p>
+            {student.coachRollNo ? (
+              <p className="mt-0.5 font-orbitron text-xs font-bold text-[#ff7524]">ID #{student.coachRollNo}</p>
+            ) : (
+              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-amber-300/90">Roll no pending</p>
+            )}
             {student.email ? <p className="mt-0.5 text-xs text-slate-400">{student.email}</p> : null}
           </div>
           {evalScore != null ? (
@@ -151,7 +156,7 @@ export default function CoachStudents() {
             <CoachSearchField
               value={query}
               onChange={setQuery}
-              placeholder="Search name, email, city, sport…"
+              placeholder="Search name, roll #, email, city, sport…"
               className="w-full sm:max-w-sm"
               aria-label="Search students"
             />

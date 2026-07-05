@@ -17,6 +17,8 @@ router.use('/business', businessRoutes);
 router.use('/admin', adminRoutes);
 router.use('/uploads', uploadRoutes);
 
-router.get('/health', (_req, res) => res.json({ success: true, message: 'Sports Ecosystem API' }));
+const healthController = require('../controllers/healthController');
+
+router.get('/health', healthController.getHealth);
 
 module.exports = router;

@@ -2,7 +2,9 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const app = require('./app');
 const { isStripeEnabled } = require('./utils/stripePayments');
-const { connectDatabase } = require('./config/database');
+const { isEasypaisaLive } = require('./utils/easypaisaPayments');
+const { logPublicAppUrlStartupChecks } = require('./utils/publicAppUrl');
+const { connectDatabase, disconnectDatabase } = require('./config/database');
 const SportCategory = require('./models/SportCategory');
 const IndoorGround = require('./models/IndoorGround');
 
@@ -11,7 +13,6 @@ async function seedMinimal() {
   if (count === 0) {
     await SportCategory.insertMany([
       { name: 'Cricket', slug: 'cricket', description: 'Indoor / training cricket' },
-      { name: 'Football', slug: 'football', description: 'Football training & grounds' },
       { name: 'Badminton', slug: 'badminton', description: 'Indoor badminton' },
     ]);
     console.log('Seeded sport categories');
@@ -67,18 +68,48 @@ async function seedMinimal() {
 }
 
 const PORT = process.env.PORT || 5000;
+let httpServer;
+
+function shutdown(signal) {
+  console.log(`[shutdown] ${signal} received — closing server`);
+  if (!httpServer) {
+    process.exit(0);
+    return;
+  }
+  httpServer.close(async () => {
+    try {
+      await disconnectDatabase();
+    } catch (e) {
+      console.error('[shutdown] db disconnect error:', e.message);
+    }
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('[shutdown] forced exit after timeout');
+    process.exit(1);
+  }, 15_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 connectDatabase()
   .then(async () => {
     await seedMinimal();
-    app.listen(PORT, () => {
-      console.log(`API listening on port ${PORT}`);
+    logPublicAppUrlStartupChecks();
+    httpServer = app.listen(PORT, () => {
+      console.log(`API listening on port ${PORT} (pid ${process.pid})`);
       if (!isStripeEnabled()) {
         console.warn(
-          '[stripe] STRIPE_SECRET_KEY missing or invalid — set sk_test_... / sk_live_... in backend/.env and restart'
+          '[stripe] STRIPE_SECRET_KEY missing — platform subscriptions need Stripe; ground/shop use Easypaisa'
         );
       } else {
-        console.log('[stripe] Payments enabled');
+        console.log('[stripe] Platform subscription payments enabled');
+      }
+      if (isEasypaisaLive()) {
+        console.log('[easypaisa] Live merchant mode enabled');
+      } else {
+        console.log('[easypaisa] Demo mode — ground & product checkout simulates Easypaisa');
       }
     });
   })

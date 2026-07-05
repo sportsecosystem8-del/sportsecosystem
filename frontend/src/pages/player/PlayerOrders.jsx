@@ -25,7 +25,9 @@ export default function PlayerOrders() {
           <PlayerCard key={o._id} className="text-sm">
             <span className="font-bold text-player-green">{o.status}</span>
             <span className="text-player-on-variant"> — {formatProductPrice(o.totalAmount)}</span>
-            {o.paymentMethod === 'cod' ? (
+            {o.paymentMethod === 'easypaisa' ? (
+              <p className="mt-1 text-xs text-emerald-200/90">Paid via Easypaisa to the store owner.</p>
+            ) : o.paymentMethod === 'cod' ? (
               <p className="mt-1 text-xs text-amber-200/90">Cash on delivery — pay when you receive the order.</p>
             ) : null}
             {o.trackingNumber ? (

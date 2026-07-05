@@ -40,7 +40,7 @@ const orderSchema = new mongoose.Schema(
     /** How the player pays — COD is default for Pakistan storefront */
     paymentMethod: {
       type: String,
-      enum: ['cod', 'stripe', 'mock'],
+      enum: ['cod', 'stripe', 'mock', 'easypaisa'],
       default: 'cod',
     },
     payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },

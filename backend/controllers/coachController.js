@@ -52,6 +52,15 @@ const {
   getCoachPlatformSubscriptionPriceUsd,
 } = require('../utils/coachPlatformSubscription');
 const { formatMeetingWhen, buildMeetingInstructions } = require('../utils/trainingRequestMessages');
+const { normalizeCoachRollNo } = require('../utils/coachRollNo');
+const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
+const { getBusinessOwnerPaymentAccount } = require('../utils/ownerPaymentAccount');
+const {
+  generateOrderRef,
+  buildEasypaisaCheckoutSession,
+  verifyEasypaisaPayment,
+} = require('../utils/easypaisaPayments');
+const { finalizeGroundBookingConfirm } = require('../utils/atomicBooking');
 
 async function verifyCoachPlatformSubscriptionPI(paymentIntentId, userId, action, amountUsd) {
   const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
@@ -82,18 +91,33 @@ async function extendCoachPlatformPeriod(userId) {
   return cp;
 }
 
-/** Avoid overlapping coach sessions */
-const SESSION_GAP_MS = 90 * 60 * 1000;
-
-async function sessionConflicts(coachId, scheduledAt, excludeSessionId = null) {
-  const t = new Date(scheduledAt).getTime();
+/** Block only when the same player already has an overlapping session */
+async function sessionConflicts(coachId, playerId, scheduledAt, durationMinutes, excludeSessionId = null) {
+  const startMs = new Date(scheduledAt).getTime();
+  const duration = Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : SESSION_DURATION_MINUTES;
+  const endMs = startMs + duration * 60 * 1000;
   const query = {
     coach: coachId,
+    player: playerId,
     status: { $in: ['scheduled'] },
   };
   if (excludeSessionId) query._id = { $ne: excludeSessionId };
-  const sessions = await TrainingSession.find(query).select('scheduledAt').lean();
-  return sessions.some((s) => Math.abs(new Date(s.scheduledAt).getTime() - t) < SESSION_GAP_MS);
+  const sessions = await TrainingSession.find(query).select('scheduledAt durationMinutes').lean();
+  return sessions.some((s) => {
+    const sStart = new Date(s.scheduledAt).getTime();
+    const sDur = s.durationMinutes ?? SESSION_DURATION_MINUTES;
+    const sEnd = sStart + sDur * 60 * 1000;
+    return startMs < sEnd && endMs > sStart;
+  });
+}
+
+async function resolveCoachSessionDuration(coachId, requestedMinutes) {
+  if (Number.isFinite(requestedMinutes) && requestedMinutes >= 15 && requestedMinutes <= 240) {
+    return Math.round(requestedMinutes);
+  }
+  const cp = await CoachProfile.findOne({ user: coachId }).select('defaultSessionDurationMinutes').lean();
+  const fallback = cp?.defaultSessionDurationMinutes ?? SESSION_DURATION_MINUTES;
+  return Math.min(240, Math.max(15, fallback));
 }
 
 const SESSION_DURATION_MINUTES = 60;
@@ -131,6 +155,7 @@ async function scheduleTrainingSession({
   trainingRequestId,
   location,
   skipFeesCheck = false,
+  durationMinutes,
 }) {
   const when = new Date(scheduledAt);
   if (Number.isNaN(when.getTime())) {
@@ -150,8 +175,10 @@ async function scheduleTrainingSession({
     await assertFeesCleared(coachId, playerId);
   }
 
-  if (await sessionConflicts(coachId, when)) {
-    const err = new Error('Another session is within 90 minutes of this time.');
+  const duration = await resolveCoachSessionDuration(coachId, durationMinutes);
+
+  if (await sessionConflicts(coachId, playerId, when, duration)) {
+    const err = new Error('This player already has a session overlapping that time.');
     err.statusCode = 409;
     throw err;
   }
@@ -171,6 +198,7 @@ async function scheduleTrainingSession({
     player: playerId,
     trainingRequest: trainingRequestId || accepted._id,
     scheduledAt: when,
+    durationMinutes: duration,
     location: location ? String(location).trim() : undefined,
     status: 'scheduled',
   });
@@ -525,6 +553,8 @@ const updateProfile = asyncHandler(async (req, res) => {
     'maxStudents',
     'specialties',
     'preferredPlayerLevels',
+    'coachingCategories',
+    'defaultSessionDurationMinutes',
     'availability',
     'monthlyTrainingFee',
     'academyImageUrls',
@@ -540,6 +570,17 @@ const updateProfile = asyncHandler(async (req, res) => {
   }
   if (req.body.preferredPlayerLevels !== undefined) {
     patch.preferredPlayerLevels = normalizeSkillLevels(req.body.preferredPlayerLevels);
+  }
+  if (req.body.coachingCategories !== undefined) {
+    const allowed = ['batsman', 'bowler', 'allrounder'];
+    const raw = Array.isArray(req.body.coachingCategories) ? req.body.coachingCategories : [];
+    patch.coachingCategories = raw.filter((c) => allowed.includes(c));
+  }
+  if (req.body.defaultSessionDurationMinutes !== undefined) {
+    const mins = Number.parseInt(req.body.defaultSessionDurationMinutes, 10);
+    if (Number.isFinite(mins)) {
+      patch.defaultSessionDurationMinutes = Math.min(240, Math.max(15, mins));
+    }
   }
   if (req.body.availability !== undefined) {
     const check = validateScheduleSlots(req.body.availability);
@@ -760,8 +801,30 @@ const markTrainingFeesCleared = asyncHandler(async (req, res) => {
     status: 'accepted',
   });
   if (!tr) return res.status(404).json({ success: false, message: 'Accepted request not found' });
+
+  const roll = normalizeCoachRollNo(req.body?.coachRollNo ?? tr.coachRollNo);
+  if (!roll) {
+    return res.status(400).json({
+      success: false,
+      message: 'Assign a unique roll number / student ID when marking fees cleared.',
+    });
+  }
+
+  const duplicate = await TrainingRequest.findOne({
+    coach: req.user.id,
+    coachRollNo: roll,
+    _id: { $ne: tr._id },
+  });
+  if (duplicate) {
+    return res.status(409).json({
+      success: false,
+      message: `Roll number "${roll}" is already assigned to another student.`,
+    });
+  }
+
   if (!tr.feesClearedAt) {
     tr.feesClearedAt = new Date();
+    tr.coachRollNo = roll;
     await tr.save();
     await StudentFeeRecord.findOneAndUpdate(
       { coach: req.user.id, player: tr.player },
@@ -770,17 +833,22 @@ const markTrainingFeesCleared = asyncHandler(async (req, res) => {
     try {
       await notifyUser(tr.player, {
         title: 'Training fees recorded',
-        body: 'Your coach marked your training fees as cleared. Your first session can now begin.',
+        body: `Your coach marked your fees as cleared. Your student ID is #${roll}. Schedule your first training session from the Sessions page.`,
         category: 'training',
       });
     } catch (e) {
       console.warn('[notify][fees-cleared] failed:', e.message);
     }
+  } else if (tr.coachRollNo !== roll) {
+    tr.coachRollNo = roll;
+    await tr.save();
   }
+
   res.json({ success: true, data: tr });
 });
 
 const startTrainingFromRequest = asyncHandler(async (req, res) => {
+  const { scheduledAt, durationMinutes, location } = req.body;
   const tr = await TrainingRequest.findOne({
     _id: req.params.id,
     coach: req.user.id,
@@ -790,11 +858,14 @@ const startTrainingFromRequest = asyncHandler(async (req, res) => {
   if (!tr.feesClearedAt) {
     return res.status(400).json({
       success: false,
-      message: 'Mark student fees as cleared before starting the first session.',
+      message: 'Mark student fees as cleared before scheduling the first session.',
     });
   }
-  if (!tr.meetingAt) {
-    return res.status(400).json({ success: false, message: 'No meeting time on this request.' });
+  if (!scheduledAt) {
+    return res.status(400).json({
+      success: false,
+      message: 'Pick a training session date and time (separate from the academy meeting).',
+    });
   }
   if (tr.firstSession) {
     const existing = await TrainingSession.findById(tr.firstSession).populate(populatePlayerBrief).lean();
@@ -809,10 +880,11 @@ const startTrainingFromRequest = asyncHandler(async (req, res) => {
     session = await scheduleTrainingSession({
       coachId: req.user.id,
       playerId: tr.player,
-      scheduledAt: tr.meetingAt,
+      scheduledAt,
       trainingRequestId: tr._id,
-      location: tr.meetingLocation,
+      location: location || tr.meetingLocation,
       skipFeesCheck: true,
+      durationMinutes,
     });
   } catch (e) {
     if (e.statusCode) {
@@ -823,16 +895,16 @@ const startTrainingFromRequest = asyncHandler(async (req, res) => {
   tr.firstSession = session._id;
   await tr.save();
   try {
-    await createAutoWeeklyPlanDraft(req.user.id, tr.player, tr.meetingAt, { ifExists: 'skip' });
+    await createAutoWeeklyPlanDraft(req.user.id, tr.player, session.scheduledAt, { ifExists: 'skip' });
   } catch (e) {
     console.warn('[plan][auto-draft-on-start] skipped:', e.message);
   }
   try {
     await notifyUser(tr.player, {
       title: 'Training session scheduled',
-      body: `Your first session is set for ${formatMeetingWhen(tr.meetingAt)}${
-        tr.meetingLocation ? ` at ${tr.meetingLocation}` : ''
-      }.`,
+      body: `Your first session is set for ${formatMeetingWhen(session.scheduledAt)}${
+        session.location ? ` at ${session.location}` : ''
+      } (${session.durationMinutes} min).`,
       category: 'training',
     });
   } catch (e) {
@@ -865,7 +937,7 @@ const listTrainingSessions = asyncHandler(async (req, res) => {
 });
 
 const createTrainingSession = asyncHandler(async (req, res) => {
-  const { playerId, scheduledAt, location } = req.body;
+  const { playerId, scheduledAt, location, durationMinutes } = req.body;
   if (!playerId || !scheduledAt) {
     return res.status(400).json({ success: false, message: 'playerId and scheduledAt are required.' });
   }
@@ -874,11 +946,12 @@ const createTrainingSession = asyncHandler(async (req, res) => {
     playerId,
     scheduledAt,
     location,
+    durationMinutes,
   });
   try {
     await notifyUser(playerId, {
       title: 'Training session scheduled',
-      body: `Your coach scheduled a session for ${new Date(session.scheduledAt).toLocaleString()}.`,
+      body: `Your coach scheduled a ${session.durationMinutes}-minute session for ${new Date(session.scheduledAt).toLocaleString()}.`,
       category: 'training',
     });
   } catch (e) {
@@ -908,10 +981,18 @@ const updateTrainingSession = asyncHandler(async (req, res) => {
     if (when.getTime() < Date.now() - 60_000) {
       return res.status(400).json({ success: false, message: 'Schedule time must be in the future.' });
     }
-    if (await sessionConflicts(req.user.id, when, session._id)) {
-      return res.status(409).json({ success: false, message: 'Another session is within 90 minutes of this time.' });
+    const duration =
+      req.body.durationMinutes !== undefined
+        ? await resolveCoachSessionDuration(req.user.id, req.body.durationMinutes)
+        : session.durationMinutes ?? SESSION_DURATION_MINUTES;
+    if (await sessionConflicts(req.user.id, session.player, when, duration, session._id)) {
+      return res.status(409).json({ success: false, message: 'This player already has a session overlapping that time.' });
     }
     patch.scheduledAt = when;
+  }
+
+  if (req.body.durationMinutes !== undefined) {
+    patch.durationMinutes = await resolveCoachSessionDuration(req.user.id, req.body.durationMinutes);
   }
 
   if (req.body.location !== undefined) {
@@ -1201,6 +1282,11 @@ const holdGroundBooking = asyncHandler(async (req, res) => {
 
   const holdMins = parseInt(process.env.HOLD_MINUTES || '5', 10);
   const holdExpiresAt = new Date(Date.now() + holdMins * 60 * 1000);
+  const durationHours = (end.getTime() - start.getTime()) / (60 * 60 * 1000);
+  const computedAmount =
+    amount != null && Number.isFinite(Number(amount))
+      ? Number(amount)
+      : Math.round((ground.pricePerHour || 0) * durationHours);
 
   const booking = await GroundBooking.create({
     ground: groundId,
@@ -1210,104 +1296,195 @@ const holdGroundBooking = asyncHandler(async (req, res) => {
     endTime: end,
     status: 'held',
     holdExpiresAt,
-    amount: amount ?? 0,
+    amount: computedAmount,
   });
   res.status(201).json({ success: true, data: booking });
 });
 
-const createGroundBookingPaymentIntent = asyncHandler(async (req, res) => {
-  if (!isStripeEnabled()) {
-    return res.status(503).json({ success: false, message: 'Stripe is not configured on the server.' });
-  }
+const initiateGroundEasypaisaPayment = asyncHandler(async (req, res) => {
   const booking = await GroundBooking.findOne({
     _id: req.params.id,
     bookedBy: req.user.id,
     bookedByRole: 'coach',
     status: 'held',
-  });
+  }).populate('ground');
   if (!booking) return res.status(404).json({ success: false, message: 'Hold not found' });
   if (booking.holdExpiresAt < new Date()) {
     booking.status = 'cancelled';
     await booking.save();
     return res.status(410).json({ success: false, message: 'Hold expired' });
   }
-  const amountMinor = groundBookingAmountToMinor(booking.amount);
-  if (!isValidGroundBookingStripeAmount(booking.amount)) {
-    return res.status(400).json({
+  const ground = booking.ground;
+  if (!ground?.businessOwner) {
+    return res.status(400).json({ success: false, message: 'This ground is not available for online payment.' });
+  }
+  const payee = await getBusinessOwnerPaymentAccount(ground.businessOwner);
+  if (!payee) {
+    return res.status(503).json({
       success: false,
-      message: `Set booking amount to at least ${GROUND_BOOKING_MIN_PKR} PKR for card payment.`,
+      message: 'Ground owner has not linked an Easypaisa account yet. Try another venue.',
     });
   }
-  const stripe = getStripe();
-  const pi = await stripe.paymentIntents.create({
-    amount: amountMinor,
-    currency: GROUND_BOOKING_CURRENCY,
-    ...paymentIntentMethodSpec(),
-    metadata: {
+  if (!Number.isFinite(Number(booking.amount)) || booking.amount < 0) {
+    return res.status(400).json({ success: false, message: 'Invalid booking amount.' });
+  }
+  if (booking.amount === 0) {
+    return res.json({
+      success: true,
+      data: {
+        orderRef: generateOrderRef('GB-FREE'),
+        amount: 0,
+        currency: 'PKR',
+        payeeMobile: payee.mobile,
+        payeeTitle: payee.accountTitle,
+        mode: 'free',
+        instructions: 'No advance payment required for this slot.',
+      },
+    });
+  }
+
+  const orderRef = generateOrderRef('GB');
+  const session = buildEasypaisaCheckoutSession({
+    orderRef,
+    amount: booking.amount,
+    currency: 'PKR',
+    payeeMobile: payee.mobile,
+    payeeTitle: payee.accountTitle,
+  });
+
+  const existingPending = await Payment.findOne({
+    payer: req.user.id,
+    status: 'pending',
+    'meta.bookingId': String(booking._id),
+  });
+  if (existingPending) await Payment.deleteOne({ _id: existingPending._id });
+
+  await Payment.create({
+    payer: req.user.id,
+    payee: ground.businessOwner,
+    type: 'ground_booking',
+    amount: booking.amount,
+    status: 'pending',
+    externalRef: orderRef,
+    meta: {
+      paymentMethod: 'easypaisa',
       purpose: 'ground_booking',
-      bookedById: String(req.user.id),
-      bookedByRole: 'coach',
+      orderRef,
       bookingId: String(booking._id),
-      amountMinor: String(amountMinor),
+      payeeMobile: payee.mobile,
+      payeeTitle: payee.accountTitle,
+      mockPayToken: session.mockPayToken,
+      bookedByRole: 'coach',
     },
   });
-  res.json({
-    success: true,
-    data: { clientSecret: pi.client_secret, amount: booking.amount, currency: GROUND_BOOKING_CURRENCY },
-  });
+
+  res.json({ success: true, data: session });
 });
 
 const confirmGroundPayment = asyncHandler(async (req, res) => {
+  const { guestName, guestPhone, guestAddress, guestCity, orderRef, easypaisaTxnId, mockPayToken } = req.body;
   const booking = await GroundBooking.findOne({
     _id: req.params.id,
     bookedBy: req.user.id,
     bookedByRole: 'coach',
     status: 'held',
-  });
+  }).populate('ground');
   if (!booking) return res.status(404).json({ success: false, message: 'Hold not found' });
   if (booking.holdExpiresAt < new Date()) {
     booking.status = 'cancelled';
     await booking.save();
     return res.status(410).json({ success: false, message: 'Hold expired' });
   }
-  const conflict = await hasOverlap(booking.ground, booking.startTime, booking.endTime, booking._id);
-  if (conflict) {
-    booking.status = 'cancelled';
-    await booking.save();
-    return res.status(409).json({ success: false, message: 'Slot no longer available' });
+
+  const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
+  const name = guestName?.trim() || cp?.fullName || 'Coach';
+  const phone = guestPhone?.trim() || cp?.phone || '';
+  if (!phone) {
+    return res.status(400).json({
+      success: false,
+      message: 'Add your phone number in profile or provide a contact phone to confirm booking.',
+    });
+  }
+  if (!orderRef && booking.amount > 0) {
+    return res.status(400).json({ success: false, message: 'Payment reference is required.' });
   }
 
-  let externalRef = 'mock-gateway';
-  if (isStripeEnabled()) {
-    const { paymentIntentId } = req.body;
-    if (!paymentIntentId) {
-      return res.status(400).json({ success: false, message: 'paymentIntentId is required after card payment.' });
+  let paymentId;
+  let txnLabel = 'N/A';
+
+  if (booking.amount > 0) {
+    const pending = await Payment.findOne({
+      payer: req.user.id,
+      status: 'pending',
+      externalRef: orderRef,
+      'meta.bookingId': String(booking._id),
+      type: 'ground_booking',
+    });
+    if (!pending) {
+      return res.status(400).json({ success: false, message: 'Payment session not found. Start checkout again.' });
     }
-    const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
-    if (
-      pi.metadata.purpose !== 'ground_booking' ||
-      pi.metadata.bookedById !== String(req.user.id) ||
-      pi.metadata.bookedByRole !== 'coach' ||
-      pi.metadata.bookingId !== String(booking._id)
-    ) {
-      return res.status(400).json({ success: false, message: 'Invalid payment for this booking.' });
-    }
-    assertAmountMatches(pi, groundBookingAmountToMinor(booking.amount));
-    externalRef = paymentIntentId;
+
+    const verified = await verifyEasypaisaPayment({
+      orderRef,
+      txnId: easypaisaTxnId,
+      mockPayToken,
+      expectedAmount: booking.amount,
+      pendingMeta: pending.meta,
+    });
+
+    pending.status = 'completed';
+    pending.externalRef = verified.txnId;
+    pending.meta = {
+      ...pending.meta,
+      easypaisaTxnId: verified.txnId,
+      verifiedAt: new Date().toISOString(),
+      mode: verified.mode,
+    };
+    await pending.save();
+    paymentId = pending._id;
+    txnLabel = verified.txnId;
   }
 
-  const payment = await Payment.create({
-    payer: req.user.id,
-    type: 'ground_booking',
-    amount: booking.amount,
-    status: 'completed',
-    externalRef,
-  });
-  booking.payment = payment._id;
-  booking.status = 'confirmed';
-  booking.holdExpiresAt = undefined;
-  await booking.save();
-  res.json({ success: true, data: booking });
+  const paymentNote =
+    booking.amount > 0
+      ? `Easypaisa payment received — PKR ${booking.amount}. Txn: ${txnLabel}.`
+      : 'Booking confirmed — no advance payment required.';
+
+  let confirmedBooking;
+  try {
+    confirmedBooking = await finalizeGroundBookingConfirm({
+      booking,
+      paymentId,
+      txnLabel,
+      guestName: name,
+      guestPhone: phone,
+      guestAddress: guestAddress ? String(guestAddress).trim() : cp?.academyLocation || undefined,
+      guestCity: guestCity ? String(guestCity).trim() : cp?.city || undefined,
+      paymentNote,
+    });
+  } catch (e) {
+    if (e.statusCode === 409) {
+      booking.status = 'cancelled';
+      await booking.save();
+    }
+    return res.status(e.statusCode || 500).json({ success: false, message: e.message });
+  }
+
+  const ground = booking.ground;
+  if (ground?.businessOwner) {
+    try {
+      await notifyUser(ground.businessOwner, {
+        title: 'Ground booking confirmed',
+        body: `${name} booked ${ground.name} (${new Date(confirmedBooking.startTime).toLocaleString()}). Ref: ${confirmedBooking.confirmationToken}`,
+        category: 'booking',
+        actionUrl: '/business/ground-bookings',
+      });
+    } catch (e) {
+      console.warn('[notify][coach-ground-booking] failed:', e.message);
+    }
+  }
+
+  res.json({ success: true, data: confirmedBooking });
 });
 
 const cancelGroundBooking = asyncHandler(async (req, res) => {
@@ -1485,6 +1662,16 @@ const listDocuments = asyncHandler(async (req, res) => {
   res.json({ success: true, data: list });
 });
 
+const streamOwnDocumentFile = asyncHandler(async (req, res) => {
+  const doc = await VerificationDocument.findOne({
+    _id: req.params.docId,
+    user: req.user.id,
+    roleContext: 'coach',
+  }).lean();
+  if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
+  streamVerificationDocumentFile(doc, res);
+});
+
 function averagePerformanceScore(row) {
   return evaluationSummaryScore(row);
 }
@@ -1603,6 +1790,7 @@ const getDashboard = asyncHandler(async (req, res) => {
       playerCategory: pp?.playerCategory || '',
       profilePhotoUrl: pp?.profilePhotoUrl || '',
       profileUpdatedAt: pp?.updatedAt,
+      coachRollNo: tr.coachRollNo || '',
       acceptedAt: tr.updatedAt || tr.createdAt,
       nextSessionAt: nextSessionByPlayer.get(pid) || null,
     });
@@ -1660,7 +1848,7 @@ module.exports = {
   getPlayerProgress,
   listCoachGroundBookings,
   holdGroundBooking,
-  createGroundBookingPaymentIntent,
+  initiateGroundEasypaisaPayment,
   confirmGroundPayment,
   cancelGroundBooking,
   listFeedback,
@@ -1676,4 +1864,5 @@ module.exports = {
   uploadAcademyPhoto,
   removeAcademyPhoto,
   listDocuments,
+  streamOwnDocumentFile,
 };

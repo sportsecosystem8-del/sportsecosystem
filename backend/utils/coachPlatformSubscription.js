@@ -1,7 +1,7 @@
 const SystemSettings = require('../models/SystemSettings');
 
 const COACH_SUB_PRICE_KEY = 'coach_platform_subscription_usd';
-const DEFAULT_COACH_SUB_USD = 25;
+const DEFAULT_COACH_SUB_USD = 10;
 
 function coachPlatformSubscriptionActive(cp) {
   if (!cp || !cp.platformSubscriptionRenewsAt) return false;

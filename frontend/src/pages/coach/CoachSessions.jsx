@@ -12,6 +12,7 @@ export default function CoachSessions() {
   const [playerId, setPlayerId] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [location, setLocation] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [editingId, setEditingId] = useState(null);
   const [editScheduledAt, setEditScheduledAt] = useState('');
   const [editLocation, setEditLocation] = useState('');
@@ -26,13 +27,15 @@ export default function CoachSessions() {
     if (!silent) setLoading(true);
     if (!silent) setErr('');
     try {
-      const [sessionsRes, requestsRes] = await Promise.all([
+      const [sessionsRes, requestsRes, profileRes] = await Promise.all([
         api.get('/coaches/training-sessions'),
         api.get('/coaches/training-requests'),
+        api.get('/coaches/me/profile'),
       ]);
       const accepted = studentsFromAcceptedRequests(requestsRes.data.data || []);
       setList(sessionsRes.data.data || []);
       setStudents(accepted);
+      setDurationMinutes(profileRes.data?.data?.defaultSessionDurationMinutes ?? 60);
       setPlayerId((prev) => (prev && accepted.some((s) => s.playerId === prev) ? prev : accepted[0]?.playerId || ''));
     } catch (e) {
       setErr(getErrorMessage(e));
@@ -78,6 +81,7 @@ export default function CoachSessions() {
         playerId,
         scheduledAt: new Date(scheduledAt).toISOString(),
         location: location.trim() || undefined,
+        durationMinutes: Number.parseInt(durationMinutes, 10) || 60,
       });
       setScheduledAt('');
       setLocation('');
@@ -180,6 +184,21 @@ export default function CoachSessions() {
                 value={scheduledAt}
                 onChange={setScheduledAt}
                 placeholder="Pick session time"
+              />
+            </div>
+            <div>
+              <label className={coachLabel} htmlFor="session-duration">
+                Duration (minutes)
+              </label>
+              <input
+                id="session-duration"
+                type="number"
+                min={15}
+                max={240}
+                step={15}
+                className={`${coachField} mt-2`}
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
               />
             </div>
             <div>

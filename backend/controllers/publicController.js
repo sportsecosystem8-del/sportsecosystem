@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { verifiedBusinessOwnerIds } = require('../utils/verifiedSellers');
 const { hasOverlap } = require('../utils/groundBookings');
 const { slotsForGroundOnDay, findNearestAvailableSlot } = require('../utils/groundSlots');
+const { parsePagination, paginationMeta } = require('../utils/pagination');
 
 const listGrounds = asyncHandler(async (req, res) => {
   const filter = { isActive: true };
@@ -43,7 +44,15 @@ const listGrounds = asyncHandler(async (req, res) => {
     }
   }
 
-  res.json({ success: true, data: list });
+  const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 48, maxLimit: 100 });
+  const total = list.length;
+  const data = list.slice(skip, skip + limit);
+
+  res.json({
+    success: true,
+    data,
+    pagination: paginationMeta({ page, limit, total }),
+  });
 });
 
 /** Query: startTime, endTime (ISO). Returns whether interval is free of held/confirmed bookings. */
@@ -114,8 +123,16 @@ const listProducts = asyncHandler(async (req, res) => {
       filter.sportType = s;
     }
   }
-  const list = await Product.find(filter).sort({ createdAt: -1 }).lean();
-  res.json({ success: true, data: list });
+  const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 48, maxLimit: 100 });
+  const [list, total] = await Promise.all([
+    Product.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Product.countDocuments(filter),
+  ]);
+  res.json({
+    success: true,
+    data: list,
+    pagination: paginationMeta({ page, limit, total }),
+  });
 });
 
 module.exports = { listGrounds, checkGroundSlotAvailability, listGroundDaySlots, listProducts };

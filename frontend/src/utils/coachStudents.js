@@ -19,6 +19,7 @@ export function studentsFromAcceptedRequests(requests) {
       city: tr.player?.playerProfile?.city || '',
       profilePhotoUrl: tr.player?.playerProfile?.profilePhotoUrl || '',
       updatedAt: tr.player?.playerProfile?.updatedAt,
+      coachRollNo: tr.coachRollNo || '',
     });
   }
   return list.sort((a, b) => a.fullName.localeCompare(b.fullName));
@@ -27,7 +28,14 @@ export function studentsFromAcceptedRequests(requests) {
 export function matchesStudentQuery(student, query) {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const hay = [student.fullName, student.email, student.city, student.sportPreference, student.skillLevel]
+  const hay = [
+    student.fullName,
+    student.email,
+    student.city,
+    student.sportPreference,
+    student.skillLevel,
+    student.coachRollNo,
+  ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -37,6 +45,7 @@ export function matchesStudentQuery(student, query) {
 /** Dropdown label — name plus city/sport/email so same-name students stay distinct. */
 export function formatStudentOptionLabel(student) {
   const parts = [student.fullName];
+  if (student.coachRollNo) parts.push(`#${student.coachRollNo}`);
   if (student.city) parts.push(student.city);
   if (student.sportPreference) parts.push(student.sportPreference);
   if (student.email) parts.push(student.email);
@@ -65,6 +74,7 @@ export function matchesTrainingRequestQuery(request, query) {
     p?.skillLevel,
     request.status,
     request.message,
+    request.coachRollNo,
   ]
     .filter(Boolean)
     .join(' ')

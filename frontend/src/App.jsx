@@ -13,7 +13,9 @@ import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerCoaches from './pages/player/PlayerCoaches';
 import PlayerTraining from './pages/player/PlayerTraining';
 import PlayerGrounds from './pages/player/PlayerGrounds';
+import PlayerGroundBookings from './pages/player/PlayerGroundBookings';
 import PlayerShop from './pages/player/PlayerShop';
+import PlayerStore from './pages/player/PlayerStore';
 import PlayerOrders from './pages/player/PlayerOrders';
 import PlayerPerformance from './pages/player/PlayerPerformance';
 import PlayerNotifications from './pages/player/PlayerNotifications';
@@ -41,6 +43,8 @@ import BusinessCoaches from './pages/business/BusinessCoaches';
 import BusinessDocuments from './pages/business/BusinessDocuments';
 import BusinessGrounds from './pages/business/BusinessGrounds';
 import BusinessGroundBookings from './pages/business/BusinessGroundBookings';
+import BusinessPaymentSettings from './pages/business/BusinessPaymentSettings';
+import BusinessStoreSettings from './pages/business/BusinessStoreSettings';
 import BusinessNotifications from './pages/business/BusinessNotifications';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminVerifyCoaches from './pages/admin/AdminVerifyCoaches';
@@ -73,7 +77,9 @@ export default function App() {
           <Route path="coaches" element={<PlayerCoaches />} />
           <Route path="training" element={<PlayerTraining />} />
           <Route path="grounds" element={<PlayerGrounds />} />
+          <Route path="ground-bookings" element={<PlayerGroundBookings />} />
           <Route path="shop" element={<PlayerShop />} />
+          <Route path="shop/store/:ownerId" element={<PlayerStore />} />
           <Route path="orders" element={<PlayerOrders />} />
           <Route path="performance" element={<PlayerPerformance />} />
           <Route path="notifications" element={<PlayerNotifications />} />
@@ -105,11 +111,13 @@ export default function App() {
         <Route path="/business" element={<AppLayout />}>
           <Route index element={<BusinessDashboard />} />
           <Route path="products" element={<BusinessProducts />} />
+          <Route path="store" element={<BusinessStoreSettings />} />
           <Route path="orders" element={<BusinessOrders />} />
           <Route path="subscription" element={<BusinessSubscription />} />
           <Route path="coaches" element={<BusinessCoaches />} />
           <Route path="grounds" element={<BusinessGrounds />} />
           <Route path="ground-bookings" element={<BusinessGroundBookings />} />
+          <Route path="payment" element={<BusinessPaymentSettings />} />
           <Route path="notifications" element={<BusinessNotifications />} />
           <Route path="documents" element={<BusinessDocuments />} />
         </Route>

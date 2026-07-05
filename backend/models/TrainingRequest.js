@@ -16,6 +16,8 @@ const trainingRequestSchema = new mongoose.Schema(
     meetingLocation: String,
     meetingAcademyName: String,
     feesClearedAt: Date,
+    /** Unique roll / student ID assigned by coach when fees are cleared */
+    coachRollNo: { type: String, trim: true },
     firstSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TrainingSession' },
   },
   { timestamps: true }
@@ -23,5 +25,6 @@ const trainingRequestSchema = new mongoose.Schema(
 
 trainingRequestSchema.index({ coach: 1, status: 1 });
 trainingRequestSchema.index({ player: 1 });
+trainingRequestSchema.index({ coach: 1, coachRollNo: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('TrainingRequest', trainingRequestSchema);

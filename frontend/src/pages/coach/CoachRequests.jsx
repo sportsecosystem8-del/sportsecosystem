@@ -18,6 +18,9 @@ export default function CoachRequests() {
   const [coachOrigin, setCoachOrigin] = useState('');
   const [coachProfile, setCoachProfile] = useState(null);
   const [query, setQuery] = useState('');
+  const [rollNoById, setRollNoById] = useState({});
+  const [firstSessionAtById, setFirstSessionAtById] = useState({});
+  const [firstSessionDurationById, setFirstSessionDurationById] = useState({});
   const [busyId, setBusyId] = useState(null);
 
   const filtered = list.filter((r) => matchesTrainingRequestQuery(r, query));
@@ -73,11 +76,22 @@ export default function CoachRequests() {
   };
 
   const markFees = async (id) => {
+    const coachRollNo = String(rollNoById[id] || '').trim();
+    if (!coachRollNo) {
+      setErr('Enter a unique roll number / student ID before marking fees cleared.');
+      return;
+    }
+    const wasCleared = Boolean(list.find((x) => x._id === id)?.feesCleared);
     setBusyId(id);
     setErr('');
     try {
-      await api.post(`/coaches/training-requests/${id}/mark-fees-cleared`);
-      setInfo('Fees marked cleared. You can now create the first session.');
+      await api.post(`/coaches/training-requests/${id}/mark-fees-cleared`, { coachRollNo });
+      setInfo(
+        wasCleared
+          ? `Student ID #${coachRollNo} saved.`
+          : `Fees marked cleared. Student ID #${coachRollNo} assigned — you can create the first session.`,
+      );
+      setRollNoById((prev) => ({ ...prev, [id]: '' }));
       load();
     } catch (e) {
       setErr(getErrorMessage(e));
@@ -87,11 +101,20 @@ export default function CoachRequests() {
   };
 
   const startSession = async (id) => {
+    const scheduledAt = firstSessionAtById[id];
+    if (!scheduledAt) {
+      setErr('Pick a training session date and time.');
+      return;
+    }
     setBusyId(id);
     setErr('');
     try {
-      await api.post(`/coaches/training-requests/${id}/start-session`);
-      setInfo('First training session created — player added to Weekly Schedule.');
+      await api.post(`/coaches/training-requests/${id}/start-session`, {
+        scheduledAt: new Date(scheduledAt).toISOString(),
+        durationMinutes: Number.parseInt(firstSessionDurationById[id], 10) || 60,
+      });
+      setInfo('First training session scheduled — player notified.');
+      setFirstSessionAtById((prev) => ({ ...prev, [id]: '' }));
       load();
     } catch (e) {
       setErr(getErrorMessage(e));
@@ -136,10 +159,18 @@ export default function CoachRequests() {
             onScheduledAtChange={(value) => setScheduledAtById((prev) => ({ ...prev, [r._id]: value }))}
             meetingLocation={meetingLocationById[r._id] ?? coachOrigin}
             onMeetingLocationChange={(value) => setMeetingLocationById((prev) => ({ ...prev, [r._id]: value }))}
+            rollNo={rollNoById[r._id] ?? ''}
+            onRollNoChange={(value) => setRollNoById((prev) => ({ ...prev, [r._id]: value }))}
             onAccept={() => act(r._id, 'accepted')}
             onReject={() => act(r._id, 'rejected')}
             onMarkFeesCleared={markFees}
-            onStartSession={startSession}
+            firstSessionAt={firstSessionAtById[r._id] || ''}
+            onFirstSessionAtChange={(value) => setFirstSessionAtById((prev) => ({ ...prev, [r._id]: value }))}
+            firstSessionDuration={firstSessionDurationById[r._id] ?? 60}
+            onFirstSessionDurationChange={(value) =>
+              setFirstSessionDurationById((prev) => ({ ...prev, [r._id]: value }))
+            }
+            onScheduleFirstSession={startSession}
             busy={busyId === r._id}
           />
         ))}

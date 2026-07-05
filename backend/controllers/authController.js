@@ -8,6 +8,7 @@ const CoachProfile = require('../models/CoachProfile');
 const BusinessProfile = require('../models/BusinessProfile');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendMail, isMailerConfigured } = require('../utils/mailer');
+const { queueEmail } = require('../utils/asyncEmail');
 const {
   validateScheduleSlots,
   normalizeSkillLevels,
@@ -18,7 +19,7 @@ function signToken(user) {
   return jwt.sign(
     { sub: user._id.toString(), role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '3m' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 }
 
@@ -40,8 +41,10 @@ function makeToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+const { getPublicAppUrlForEmailLinks } = require('../utils/publicAppUrl');
+
 function frontendBaseUrl() {
-  return process.env.APP_BASE_URL || 'http://localhost:5173';
+  return getPublicAppUrlForEmailLinks();
 }
 
 async function sendVerificationEmail(user, rawToken) {
@@ -74,14 +77,14 @@ const register = asyncHandler(async (req, res) => {
     if (!Array.isArray(specs) || specs.length < 1) {
       return res.status(400).json({
         success: false,
-        message: 'Coach registration requires at least one specialty (cricket, football, or badminton).',
+        message: 'Coach registration requires at least one specialty (cricket or badminton).',
       });
     }
-    const allowed = ['cricket', 'football', 'badminton'];
+    const allowed = ['cricket', 'badminton'];
     if (!specs.every((s) => allowed.includes(s))) {
       return res.status(400).json({
         success: false,
-        message: 'Specialties must be cricket, football, and/or badminton.',
+        message: 'Specialties must be cricket and/or badminton.',
       });
     }
     const mapLink = String(profile?.locationMapUrl || '').trim();
@@ -212,11 +215,7 @@ const register = asyncHandler(async (req, res) => {
   user.emailVerificationExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_MS);
   await user.save();
   if (isMailerConfigured()) {
-    try {
-      await sendVerificationEmail(user, rawToken);
-    } catch (e) {
-      console.error('Verification email send failed:', e.message);
-    }
+    queueEmail(() => sendVerificationEmail(user, rawToken));
   }
 
   res.status(201).json({
@@ -301,11 +300,7 @@ const passwordResetRequest = asyncHandler(async (req, res) => {
     user.passwordResetExpiresAt = new Date(Date.now() + RESET_TTL_MS);
     await user.save();
     if (isMailerConfigured()) {
-      try {
-        await sendPasswordResetEmail(user, rawToken);
-      } catch (e) {
-        console.error('Password reset email failed:', e.message);
-      }
+      queueEmail(() => sendPasswordResetEmail(user, rawToken));
     }
   }
   res.json({
@@ -361,11 +356,7 @@ const resendVerification = asyncHandler(async (req, res) => {
   user.emailVerificationExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_MS);
   await user.save();
   if (isMailerConfigured()) {
-    try {
-      await sendVerificationEmail(user, rawToken);
-    } catch (e) {
-      console.error('Verification email resend failed:', e.message);
-    }
+    queueEmail(() => sendVerificationEmail(user, rawToken));
   }
   res.json({ success: true, message: 'If an account exists, a verification email has been sent.' });
 });

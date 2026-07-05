@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import PlayerCard from '../../components/player/PlayerCard';
 import { GroundBrowseCard } from '../../components/GroundMedia';
-import StripePaySection, { stripePublishableConfigured } from '../../components/payment/StripePaySection';
+import EasypaisaPaySection from '../../components/payment/EasypaisaPaySection';
 import { playerField, playerLabel, playerSelect } from '../../components/player/playerClassNames';
 import { api, getErrorMessage } from '../../services/api';
 import { formatGroundBookingAmount } from '../../utils/groundBookingCurrency';
@@ -37,7 +38,7 @@ function downloadBookingReceipt(booking, ground) {
     booking.guestAddress ? `Address: ${booking.guestAddress}` : null,
     booking.guestCity ? `City: ${booking.guestCity}` : null,
     '',
-    'Booked via Sports Ecosystem Platform — no phone call required.',
+    'Booked via Sports Ecosystem Platform — payment to ground owner via Easypaisa.',
     `Generated: ${new Date().toLocaleString()}`,
   ].filter(Boolean);
   const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
@@ -51,6 +52,11 @@ function downloadBookingReceipt(booking, ground) {
 
 export default function PlayerGroundBook({ defaultSport = '' }) {
   const [sport, setSport] = useState(defaultSport);
+  const sportLocked = Boolean(defaultSport);
+
+  useEffect(() => {
+    if (defaultSport) setSport(defaultSport);
+  }, [defaultSport]);
   const [city, setCity] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -63,11 +69,10 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
   const [suggestedSlot, setSuggestedSlot] = useState(null);
   const [hold, setHold] = useState(null);
   const [guest, setGuest] = useState({ fullName: '', phone: '', address: '', city: '' });
+  const [paySession, setPaySession] = useState(null);
   const [confirmed, setConfirmed] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [stripeClientSecret, setStripeClientSecret] = useState('');
-  const useStripe = stripePublishableConfigured();
 
   const loadGrounds = useCallback(() => {
     const params = new URLSearchParams();
@@ -120,26 +125,29 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
     loadSlots(selectedGround._id, slotDate, preferStart);
   }, [selectedGround, slotDate, filterDate, filterTime, loadSlots]);
 
-  useEffect(() => {
-    if (!hold?._id || !useStripe) {
-      setStripeClientSecret('');
-      return undefined;
+  const loadPaySession = useCallback(() => {
+    if (!hold?._id) {
+      setPaySession(null);
+      return;
     }
-    let cancelled = false;
     api
-      .post(`/players/ground-bookings/${hold._id}/payment-intent`)
-      .then((r) => {
-        if (!cancelled) setStripeClientSecret(r.data?.data?.clientSecret || '');
-      })
+      .post(`/players/ground-bookings/${hold._id}/easypaisa/initiate`)
+      .then((r) => setPaySession(r.data?.data || null))
       .catch((e) => {
-        if (!cancelled) setErr(getErrorMessage(e));
+        setPaySession(null);
+        setErr(getErrorMessage(e));
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [hold?._id, useStripe]);
+  }, [hold?._id]);
 
-  const finalizeBooking = async (paymentIntentId) => {
+  useEffect(() => {
+    if (!hold?._id || !guest.fullName.trim() || !guest.phone.trim()) {
+      setPaySession(null);
+      return;
+    }
+    loadPaySession();
+  }, [hold?._id, guest.fullName, guest.phone, loadPaySession]);
+
+  const finalizeBooking = async (paymentPayload = {}) => {
     if (!hold?._id) return;
     setBusy(true);
     setErr('');
@@ -149,26 +157,21 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
         guestPhone: guest.phone,
         guestAddress: guest.address,
         guestCity: guest.city,
+        ...paymentPayload,
       };
-      if (paymentIntentId) payload.paymentIntentId = paymentIntentId;
       const { data } = await api.post(`/players/ground-bookings/${hold._id}/confirm-payment`, payload);
       setConfirmed({ booking: data.data, ground: selectedGround });
       setHold(null);
       setSelectedSlot(null);
       setSuggestedSlot(null);
-      setStripeClientSecret('');
+      setPaySession(null);
       loadGrounds();
     } catch (e) {
       setErr(getErrorMessage(e));
+      throw e;
     } finally {
       setBusy(false);
     }
-  };
-
-  const confirmBooking = async (e) => {
-    e.preventDefault();
-    if (useStripe) return;
-    await finalizeBooking();
   };
 
   const holdSlot = async () => {
@@ -192,6 +195,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
 
   const pickSlot = (slot) => {
     setHold(null);
+    setPaySession(null);
     if (!slot.available) {
       const nearest = findNearestAvailableSlot(slots, slot.startTime);
       setSuggestedSlot(nearest);
@@ -219,17 +223,10 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
     setSelectedSlot(null);
     setSuggestedSlot(null);
     setHold(null);
+    setPaySession(null);
   };
 
   const guestFieldsValid = guest.fullName.trim() && guest.phone.trim();
-
-  const handleStripePaid = async (paymentIntentId) => {
-    if (!guestFieldsValid) {
-      setErr('Enter your name and phone before paying.');
-      return;
-    }
-    await finalizeBooking(paymentIntentId);
-  };
 
   return (
     <div className="space-y-8">
@@ -237,6 +234,12 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
         title="Book a ground"
         subtitle={playerGroundsSubtitle(sport)}
       />
+      <p className="text-xs text-slate-500">
+        Pay via Easypaisa to the ground owner when you book.{' '}
+        <Link to="/player/ground-bookings" className="text-player-green underline">
+          My bookings
+        </Link>
+      </p>
       {sportFilterBadge(sport) ? (
         <p className="text-xs font-semibold uppercase tracking-wider text-player-green">
           {sportFilterBadge(sport)}
@@ -258,6 +261,9 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
           >
             Download confirmation proof
           </button>
+          <Link to="/player/ground-bookings" className="ml-3 mt-4 inline-block text-sm text-slate-400 underline">
+            View all bookings
+          </Link>
           <button type="button" className="ml-3 mt-4 text-sm text-slate-400 underline" onClick={() => setConfirmed(null)}>
             Book another
           </button>
@@ -267,8 +273,13 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
       <PlayerCard className="p-5">
         <p className={playerLabel}>Filters</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <select className={playerSelect} value={sport} onChange={(e) => setSport(e.target.value)}>
-            <option value="">All sports</option>
+          <select
+            className={playerSelect}
+            value={sport}
+            onChange={(e) => setSport(e.target.value)}
+            disabled={sportLocked}
+          >
+            {!sportLocked ? <option value="">All sports</option> : null}
             <option value="cricket">Cricket</option>
             <option value="badminton">Badminton</option>
           </select>
@@ -285,29 +296,32 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
           <input className={playerField} type="time" value={filterTime} onChange={(e) => setFilterTime(e.target.value)} />
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          Filter by sport, city, budget, and preferred date/time. Book online — no call required.
+          Filter by sport, city, budget, and preferred date/time. Advance Easypaisa payment secures your slot.
         </p>
       </PlayerCard>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
         <div>
           <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">
             Venues ({grounds.length})
           </h2>
-          <ul className="mt-3 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-            {grounds.map((g) => (
-              <li key={g._id}>
-                <GroundBrowseCard
-                  ground={g}
-                  selected={selectedGround?._id === g._id}
-                  onSelect={selectGround}
-                  accent="player"
-                  mode="book"
-                />
-              </li>
-            ))}
-            {!grounds.length ? <p className="text-sm text-slate-500">No grounds match your filters.</p> : null}
-          </ul>
+          {!grounds.length ? (
+            <p className="mt-3 text-sm text-slate-500">No grounds match your filters.</p>
+          ) : (
+            <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {grounds.map((g) => (
+                <li key={g._id} className="min-w-0">
+                  <GroundBrowseCard
+                    ground={g}
+                    selected={selectedGround?._id === g._id}
+                    onSelect={selectGround}
+                    accent="player"
+                    mode="book"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div>
@@ -329,6 +343,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
                   setSelectedSlot(null);
                   setSuggestedSlot(null);
                   setHold(null);
+                  setPaySession(null);
                 }}
               />
               {suggestedSlot && !selectedSlot ? (
@@ -389,8 +404,8 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
               ) : null}
 
               {hold ? (
-                <form onSubmit={confirmBooking} className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                  <p className="text-xs text-amber-200">Slot held — enter your details and confirm.</p>
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                  <p className="text-xs text-amber-200">Slot held — enter your details, then pay via Easypaisa.</p>
                   <input
                     className={playerField}
                     required
@@ -417,32 +432,22 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
                     value={guest.city}
                     onChange={(e) => setGuest((g) => ({ ...g, city: e.target.value }))}
                   />
-                  {useStripe ? (
-                    <div className="space-y-3 border-t border-white/10 pt-3">
-                      <p className="text-xs text-slate-400">
-                        Pay securely by card, then your booking is confirmed automatically.
-                      </p>
-                      <StripePaySection
-                        clientSecret={stripeClientSecret}
-                        onSucceeded={handleStripePaid}
+                  {guestFieldsValid ? (
+                    paySession ? (
+                      <EasypaisaPaySection
+                        session={paySession}
+                        busy={busy}
+                        onConfirm={finalizeBooking}
                         onError={(msg) => setErr(msg)}
-                        submitLabel="Pay & confirm booking"
-                        busyLabel="Processing payment…"
+                        submitLabel="Verify & confirm booking"
                       />
-                      {!stripeClientSecret ? (
-                        <p className="text-xs text-slate-500">Preparing secure checkout…</p>
-                      ) : null}
-                    </div>
+                    ) : (
+                      <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
+                    )
                   ) : (
-                    <button
-                      type="submit"
-                      disabled={busy}
-                      className="w-full rounded-lg bg-player-green py-2.5 text-sm font-bold uppercase tracking-wider text-black disabled:opacity-50"
-                    >
-                      {busy ? 'Confirming…' : 'Confirm booking (pay at venue)'}
-                    </button>
+                    <p className="text-xs text-slate-500">Enter name and phone to load payment.</p>
                   )}
-                </form>
+                </div>
               ) : null}
             </PlayerCard>
           ) : (

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import DocumentPreviewModal from '../../components/DocumentPreviewModal';
+import { useVerificationDocumentPreview } from '../../hooks/useVerificationDocumentPreview';
 import { api, getErrorMessage } from '../../services/api';
 
 export default function CoachDocuments() {
   const [list, setList] = useState([]);
   const [err, setErr] = useState('');
+  const docPreview = useVerificationDocumentPreview();
 
   const load = () =>
     api
@@ -32,8 +35,25 @@ export default function CoachDocuments() {
     }
   };
 
+  const preview = async (docId, originalName) => {
+    try {
+      await docPreview.view(`/coaches/documents/${docId}/file`, originalName);
+    } catch (e) {
+      alert(e.message || 'Could not open document.');
+    }
+  };
+
   return (
     <div>
+      <DocumentPreviewModal
+        open={Boolean(docPreview.preview)}
+        title="Document preview"
+        fileName={docPreview.preview?.originalName}
+        blobUrl={docPreview.preview?.blobUrl}
+        mimeType={docPreview.preview?.mimeType}
+        onClose={docPreview.close}
+        onDownload={docPreview.download}
+      />
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-5xl tracking-[0.08em] text-white">CERTIFICATIONS</h1>
@@ -51,9 +71,18 @@ export default function CoachDocuments() {
       </form>
       <ul className="mt-8 grid gap-4 lg:grid-cols-2">
         {list.map((d) => (
-          <li key={d._id} className="midnight-asymmetric border border-player-inner/40 bg-player-container p-4">
-            <p className="font-headline text-sm uppercase tracking-[0.15em] text-white">{d.originalName}</p>
-            <p className="mt-1 font-orbitron text-xs uppercase tracking-widest text-[#ff7524]">{d.status}</p>
+          <li key={d._id} className="midnight-asymmetric flex flex-col gap-3 border border-player-inner/40 bg-player-container p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-headline text-sm uppercase tracking-[0.15em] text-white">{d.originalName}</p>
+              <p className="mt-1 font-orbitron text-xs uppercase tracking-widest text-[#ff7524]">{d.status}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => preview(d._id, d.originalName)}
+              className="shrink-0 border border-[#ff7524]/40 px-4 py-2 font-headline text-[10px] uppercase tracking-wider text-[#ff7524]"
+            >
+              View
+            </button>
           </li>
         ))}
       </ul>

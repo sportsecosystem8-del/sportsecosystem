@@ -46,7 +46,7 @@ export default function CoachStudentPicker({
           <CoachSearchField
             value={query}
             onChange={setQuery}
-            placeholder="Search by name, email, city, or sport…"
+            placeholder="Search by name, roll #, email, city, or sport…"
             aria-label="Search students"
           />
           <p className="font-label text-[10px] uppercase tracking-wider text-slate-500">
@@ -87,7 +87,14 @@ export default function CoachStudentPicker({
                 className={selected ? 'ring-2 ring-[#ff7524] ring-offset-2 ring-offset-player-bg' : ''}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">{s.fullName}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-white">{s.fullName}</p>
+                  {s.coachRollNo ? (
+                    <span className="shrink-0 rounded bg-[#ff7524]/20 px-2 py-0.5 font-orbitron text-[10px] font-bold uppercase tracking-wider text-[#ff7524]">
+                      #{s.coachRollNo}
+                    </span>
+                  ) : null}
+                </div>
                 {s.city || s.sportPreference ? (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {s.city ? <StudentMetaTag>{s.city}</StudentMetaTag> : null}

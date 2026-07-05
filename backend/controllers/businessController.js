@@ -12,11 +12,13 @@ const GroundBooking = require('../models/GroundBooking');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { enrichOrderItemsWithImages } = require('../utils/productImages');
 const { notifyUser } = require('../utils/notify');
+const { normalizeEasypaisaMobile } = require('../utils/ownerPaymentAccount');
 const {
   parseGroundImagePaths,
   sanitizeGroundPayload,
   validateGroundImages,
 } = require('../utils/groundPayload');
+const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
 const {
   getStripe,
   isStripeEnabled,
@@ -60,7 +62,21 @@ const getProfile = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, req.body, { new: true });
+  const patch = { ...req.body };
+  if (patch.easypaisaMobile != null) {
+    const normalized = normalizeEasypaisaMobile(patch.easypaisaMobile);
+    if (!normalized) {
+      return res.status(400).json({
+        success: false,
+        message: 'Easypaisa mobile must be a valid Pakistani number (03XXXXXXXXX).',
+      });
+    }
+    patch.easypaisaMobile = normalized;
+  }
+  if (patch.easypaisaAccountTitle != null) {
+    patch.easypaisaAccountTitle = String(patch.easypaisaAccountTitle).trim().slice(0, 120);
+  }
+  const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, patch, { new: true });
   res.json({ success: true, data: bp });
 });
 
@@ -241,6 +257,26 @@ const updateStore = asyncHandler(async (req, res) => {
   const patch = {};
   for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
   const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, patch, { new: true });
+  res.json({ success: true, data: bp });
+});
+
+const uploadStoreLogo = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No image received. Choose JPG/PNG/WebP under 8 MB.' });
+  }
+  const url = `/uploads/${req.file.filename}`;
+  const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, { storeLogoUrl: url }, { new: true });
+  if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: bp });
+});
+
+const uploadStoreBanner = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No image received. Choose JPG/PNG/WebP under 8 MB.' });
+  }
+  const url = `/uploads/${req.file.filename}`;
+  const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, { storeBannerUrl: url }, { new: true });
+  if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
   res.json({ success: true, data: bp });
 });
 
@@ -577,6 +613,16 @@ const listBusinessDocs = asyncHandler(async (req, res) => {
   res.json({ success: true, data: list });
 });
 
+const streamOwnBusinessDocumentFile = asyncHandler(async (req, res) => {
+  const doc = await VerificationDocument.findOne({
+    _id: req.params.docId,
+    user: req.user.id,
+    roleContext: 'business_owner',
+  }).lean();
+  if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
+  streamVerificationDocumentFile(doc, res);
+});
+
 const listMyGrounds = asyncHandler(async (req, res) => {
   const list = await IndoorGround.find({ businessOwner: req.user.id }).sort({ name: 1 }).lean();
   res.json({ success: true, data: list });
@@ -665,6 +711,8 @@ module.exports = {
   renewSubscription,
   changeSubscription,
   updateStore,
+  uploadStoreLogo,
+  uploadStoreBanner,
   listMyProducts,
   addProduct,
   updateProduct,
@@ -680,6 +728,7 @@ module.exports = {
   listNotifications,
   uploadBusinessDoc,
   listBusinessDocs,
+  streamOwnBusinessDocumentFile,
   listMyGrounds,
   createBusinessGround,
   updateBusinessGround,

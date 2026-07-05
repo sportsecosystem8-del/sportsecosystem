@@ -27,17 +27,25 @@ export default function PlayerProfile() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [photoVersion, setPhotoVersion] = useState(0);
+  const [enrollments, setEnrollments] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setErr('');
       try {
-        const [meRes, profRes] = await Promise.all([api.get('/auth/me'), api.get('/players/me/profile')]);
+        const [meRes, profRes, trRes] = await Promise.all([
+          api.get('/auth/me'),
+          api.get('/players/me/profile'),
+          api.get('/players/training-requests').catch(() => ({ data: { data: [] } })),
+        ]);
         if (cancelled) return;
         setMe(meRes.data.data);
         const p = profRes.data.data;
         setProfile(p);
+        setEnrollments(
+          (trRes.data.data || []).filter((r) => r.status === 'accepted' && r.coachRollNo),
+        );
         setFullName(p.fullName || '');
         setPhone(p.phone || '');
         setSportPreference(p.sportPreference || 'cricket');
@@ -132,7 +140,7 @@ export default function PlayerProfile() {
               My profile
             </h1>
             <p className="mt-3 max-w-xl text-base font-medium leading-relaxed text-white/85">
-              Keep your details current so coaches and bookings match your sport, schedule, and location.
+              Keep your details current. Coaches identify you by your assigned student ID — profile photo is optional.
             </p>
           </div>
           <div className="flex flex-col items-center gap-3 sm:items-end">
@@ -160,6 +168,31 @@ export default function PlayerProfile() {
         <div className="midnight-asymmetric border border-player-green/35 bg-player-green/10 px-4 py-3 text-sm font-medium text-player-green shadow-lg">
           {msg}
         </div>
+      ) : null}
+
+      {enrollments.length ? (
+        <PlayerCard>
+          <h2 className="player-headline-section font-headline text-lg font-bold uppercase tracking-tight text-white">
+            Training student IDs
+          </h2>
+          <p className="mt-1 text-xs text-player-on-variant">
+            Your coach-assigned roll numbers — use these at the academy (not tied to profile photo).
+          </p>
+          <ul className="mt-4 space-y-3">
+            {enrollments.map((e) => {
+              const coachName = e.coach?.coachProfile?.fullName || e.coach?.email || 'Coach';
+              return (
+                <li
+                  key={e._id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-player-green/25 bg-player-green/5 px-4 py-3"
+                >
+                  <span className="text-sm text-slate-200">{coachName}</span>
+                  <span className="font-orbitron text-lg font-bold text-player-green">#{e.coachRollNo}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </PlayerCard>
       ) : null}
 
       <form onSubmit={onSubmit} className="grid gap-8 lg:grid-cols-2">
@@ -198,7 +231,6 @@ export default function PlayerProfile() {
                 className={playerProfileInput}
               >
                 <option value="cricket">Cricket</option>
-                <option value="football">Football</option>
                 <option value="badminton">Badminton</option>
               </select>
             </div>

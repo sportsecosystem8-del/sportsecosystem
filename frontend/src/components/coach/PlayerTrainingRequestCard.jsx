@@ -82,10 +82,16 @@ export default function PlayerTrainingRequestCard({
   onScheduledAtChange,
   meetingLocation,
   onMeetingLocationChange,
+  rollNo,
+  onRollNoChange,
   onAccept,
   onReject,
   onMarkFeesCleared,
-  onStartSession,
+  firstSessionAt,
+  onFirstSessionAtChange,
+  firstSessionDuration,
+  onFirstSessionDurationChange,
+  onScheduleFirstSession,
   busy,
 }) {
   const profile = request.player?.playerProfile;
@@ -103,6 +109,9 @@ export default function PlayerTrainingRequestCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate font-display text-3xl tracking-[0.06em] text-white sm:text-4xl">{name}</p>
+              {request.coachRollNo ? (
+                <p className="mt-1 font-orbitron text-sm font-bold text-[#ff7524]">Student ID #{request.coachRollNo}</p>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 {sport ? (
                   <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 font-headline text-[10px] uppercase tracking-wider text-slate-300">
@@ -169,24 +178,88 @@ export default function PlayerTrainingRequestCard({
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {!request.feesCleared && onMarkFeesCleared ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onMarkFeesCleared(request._id)}
-                className="bg-[#ff7524] px-4 py-2 font-headline text-[10px] uppercase tracking-wider text-black disabled:opacity-50"
-              >
-                Mark fees cleared
-              </button>
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                    Student roll no / ID <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={32}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-player-bg px-3 py-2 text-sm text-white"
+                    placeholder="e.g. 12, A-07, 2026-001"
+                    value={rollNo ?? ''}
+                    onChange={(e) => onRollNoChange?.(e.target.value)}
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Unique per student — shown on their profile and in evaluations.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy || !String(rollNo || '').trim()}
+                  onClick={() => onMarkFeesCleared(request._id)}
+                  className="bg-[#ff7524] px-4 py-2 font-headline text-[10px] uppercase tracking-wider text-black disabled:opacity-50"
+                >
+                  Mark fees cleared
+                </button>
+              </div>
+            ) : request.feesCleared && !request.coachRollNo && onMarkFeesCleared ? (
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <label className="block text-[10px] uppercase tracking-[0.2em] text-amber-300">
+                    Assign student roll no / ID <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={32}
+                    className="mt-1 w-full rounded-lg border border-amber-500/30 bg-player-bg px-3 py-2 text-sm text-white"
+                    placeholder="Required for evaluations"
+                    value={rollNo ?? ''}
+                    onChange={(e) => onRollNoChange?.(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={busy || !String(rollNo || '').trim()}
+                  onClick={() => onMarkFeesCleared(request._id)}
+                  className="border border-amber-500/50 bg-amber-500/20 px-4 py-2 font-headline text-[10px] uppercase tracking-wider text-amber-100 disabled:opacity-50"
+                >
+                  Save roll no
+                </button>
+              </div>
             ) : null}
-            {request.feesCleared && !request.sessionStarted && onStartSession ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onStartSession(request._id)}
-                className="bg-player-green/25 px-4 py-2 font-headline text-[10px] uppercase tracking-wider text-player-green disabled:opacity-50"
-              >
-                Create first session
-              </button>
+            {request.feesCleared && !request.sessionStarted && onScheduleFirstSession ? (
+              <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                  Schedule first training session (separate from academy meeting)
+                </p>
+                <ThemedDateTimePicker
+                  value={firstSessionAt || ''}
+                  onChange={onFirstSessionAtChange}
+                  placeholder="Training session date & time"
+                />
+                <div>
+                  <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min={15}
+                    max={240}
+                    step={15}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-player-bg px-3 py-2 text-sm text-white"
+                    value={firstSessionDuration ?? 60}
+                    onChange={(e) => onFirstSessionDurationChange?.(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={busy || !firstSessionAt}
+                  onClick={() => onScheduleFirstSession(request._id)}
+                  className="bg-player-green/25 px-4 py-2 font-headline text-[10px] uppercase tracking-wider text-player-green disabled:opacity-50"
+                >
+                  Schedule first session
+                </button>
+              </div>
             ) : null}
           </div>
         </div>
@@ -217,8 +290,7 @@ export default function PlayerTrainingRequestCard({
             />
           </div>
           <p className="text-xs text-slate-500">
-            Player will see this meeting info after accept. Create the first session only after training fees are
-            cleared.
+            Player will see meeting info after accept. After fees are cleared, schedule the first training session separately.
           </p>
         </div>
       ) : null}

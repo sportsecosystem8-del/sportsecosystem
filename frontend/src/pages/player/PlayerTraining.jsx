@@ -107,6 +107,10 @@ export default function PlayerTraining() {
                   ) : null}
                   {r.status === 'accepted' ? (
                     <p className="mt-1.5 text-[10px] uppercase tracking-wider text-slate-500">
+                      {r.coachRollNo ? (
+                        <span className="font-orbitron text-player-green">Student ID #{r.coachRollNo}</span>
+                      ) : null}
+                      {r.coachRollNo ? ' · ' : ''}
                       Fees: {r.feesCleared ? 'cleared' : 'pending'} · Session:{' '}
                       {r.sessionStarted ? 'scheduled' : 'after fees'}
                     </p>

@@ -9,6 +9,7 @@ const PerformanceEvaluation = require('../models/PerformanceEvaluation');
 const IndoorGround = require('../models/IndoorGround');
 const GroundBooking = require('../models/GroundBooking');
 const Product = require('../models/Product');
+const BusinessProfile = require('../models/BusinessProfile');
 const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
@@ -19,20 +20,21 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 const { evaluationAverageForTrend, evaluationSummaryScore } = require('../utils/evaluationScores');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { hasOverlap } = require('../utils/groundBookings');
-const { generateBookingToken } = require('../utils/groundSlots');
 const { notifyUser } = require('../utils/notify');
 const { verifiedBusinessOwnerIds } = require('../utils/verifiedSellers');
 const { effectiveProductPrice, inSaleWindow } = require('../utils/pricing');
 const { buildProductOrderContext } = require('../utils/productOrder');
-const {
-  GROUND_BOOKING_CURRENCY,
-  GROUND_BOOKING_MIN_PKR,
-  groundBookingAmountToMinor,
-  isValidGroundBookingStripeAmount,
-} = require('../utils/groundBookingCurrency');
+const { finalizeGroundBookingConfirm, finalizeProductOrder } = require('../utils/atomicBooking');
+const { parsePagination, paginationMeta } = require('../utils/pagination');
 const { enrichOrderItemsWithImages } = require('../utils/productImages');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
 const { buildMeetingInstructions } = require('../utils/trainingRequestMessages');
+const { getBusinessOwnerPaymentAccount } = require('../utils/ownerPaymentAccount');
+const {
+  generateOrderRef,
+  buildEasypaisaCheckoutSession,
+  verifyEasypaisaPayment,
+} = require('../utils/easypaisaPayments');
 const {
   getStripe,
   isStripeEnabled,
@@ -66,10 +68,11 @@ const populatePlayerBrief = {
 };
 
 const RECOMMENDATION_WEIGHTS = Object.freeze({
-  skill: 0.3,
-  time: 0.3,
+  skill: 0.25,
+  category: 0.15,
+  time: 0.25,
   location: 0.2,
-  performance: 0.2,
+  performance: 0.15,
 });
 
 function clamp01(v) {
@@ -215,6 +218,24 @@ function derivePlayerPerformanceSignal(evals, fallbackLevel) {
   return { normalized, level, trend, source: 'weekly_evaluations' };
 }
 
+function scoreCategoryFit(profile, sportPreference, playerCategory) {
+  if (sportPreference !== 'cricket' || !playerCategory) {
+    return { score: 1, detail: 'Category matching applies to cricket players.' };
+  }
+  const categories = Array.isArray(profile?.coachingCategories) ? profile.coachingCategories : [];
+  if (!categories.length) {
+    return { score: 0.4, detail: 'Coach has not set a coaching focus (batting/bowling/all-rounder).' };
+  }
+  const match = categories.includes('allrounder') || categories.includes(playerCategory);
+  const labels = { batsman: 'batting', bowler: 'bowling', allrounder: 'all-round' };
+  return {
+    score: match ? 1 : 0.15,
+    detail: match
+      ? `Coaching focus matches your ${labels[playerCategory] || playerCategory} category.`
+      : `Coach focuses on ${categories.map((c) => labels[c] || c).join(', ')} — not your category.`,
+  };
+}
+
 function scoreSkill(profile, sportPreference, playerLevel) {
   const specialties = Array.isArray(profile?.specialties) ? profile.specialties : [];
   const sportMatch = specialties.includes(sportPreference) ? 1 : 0;
@@ -261,12 +282,16 @@ function scorePerformanceFit(playerSignal, profile) {
 }
 
 function buildMatchReasons(breakdown, details) {
-  return [
+  const lines = [
     `Skill fit: ${breakdown.skill}% (${details.skill})`,
     `Schedule fit: ${breakdown.time}% (${details.time})`,
     `Location fit: ${breakdown.location}% (${details.location})`,
     `Performance fit: ${breakdown.performance}% (${details.performance})`,
   ];
+  if (breakdown.category != null) {
+    lines.splice(1, 0, `Category fit: ${breakdown.category}% (${details.category})`);
+  }
+  return lines;
 }
 
 function aiRecommendationsEnabled() {
@@ -353,6 +378,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
     .filter((c) => c.coachProfile && (c.coachProfile.specialties || []).includes(p.sportPreference))
     .map((c) => {
       const skill = scoreSkill(c.coachProfile, p.sportPreference, playerSignal.level);
+      const category = scoreCategoryFit(c.coachProfile, p.sportPreference, p.playerCategory);
       const time = scoreTimeOverlap(playerTimeSlots, c.coachProfile.availability);
       const location = scoreLocation(p.city, c.coachProfile);
       const performance = scorePerformanceFit(playerSignal, c.coachProfile);
@@ -360,18 +386,21 @@ const getRecommendations = asyncHandler(async (req, res) => {
       const finalScore =
         100 *
         (RECOMMENDATION_WEIGHTS.skill * skill.score +
+          RECOMMENDATION_WEIGHTS.category * category.score +
           RECOMMENDATION_WEIGHTS.time * time.score +
           RECOMMENDATION_WEIGHTS.location * location.score +
           RECOMMENDATION_WEIGHTS.performance * performance.score);
 
       const breakdown = {
         skill: Math.round(skill.score * 100),
+        category: Math.round(category.score * 100),
         time: Math.round(time.score * 100),
         location: Math.round(location.score * 100),
         performance: Math.round(performance.score * 100),
       };
       const factorDetails = {
         skill: skill.detail,
+        category: category.detail,
         time: time.detail,
         location: location.detail,
         performance: performance.detail,
@@ -421,6 +450,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
       player: {
         sportPreference: p.sportPreference,
         skillLevel: p.skillLevel,
+        playerCategory: p.playerCategory || '',
         city: p.city || '',
         trainingPreferences: p.trainingPreferences || [],
         performanceLevel: playerSignal.level,
@@ -431,6 +461,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
         fullName: s.profile?.fullName || '',
         city: s.profile?.city || '',
         specialties: s.profile?.specialties || [],
+        coachingCategories: s.profile?.coachingCategories || [],
         preferredPlayerLevels: s.profile?.preferredPlayerLevels || [],
         yearsExperience: s.profile?.yearsExperience || 0,
         averageRating: s.profile?.averageRating || 0,
@@ -551,7 +582,7 @@ const streamCoachCertificateFile = asyncHandler(async (req, res) => {
 });
 
 const COACH_PUBLIC_PROFILE_SELECT =
-  'fullName profilePhotoUrl academyImageUrls phone specialties preferredPlayerLevels academyLocation city bio yearsExperience availability averageRating ratingCount locationMapUrl monthlyTrainingFee updatedAt';
+  'fullName profilePhotoUrl academyImageUrls phone specialties preferredPlayerLevels coachingCategories academyLocation city bio yearsExperience availability averageRating ratingCount locationMapUrl monthlyTrainingFee updatedAt';
 
 const getCoachPublicProfile = asyncHandler(async (req, res) => {
   const coach = await findVerifiedCoachForPlayer(req.params.coachId);
@@ -640,6 +671,7 @@ const listMyTrainingRequests = asyncHandler(async (req, res) => {
         row.status === 'accepted' ? buildMeetingInstructions(row, cp) : null,
       feesCleared: Boolean(row.feesClearedAt),
       sessionStarted: Boolean(row.firstSession),
+      coachRollNo: row.coachRollNo || '',
     };
   });
   res.json({ success: true, data });
@@ -716,50 +748,87 @@ const holdGroundBooking = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: booking });
 });
 
-const createGroundBookingPaymentIntent = asyncHandler(async (req, res) => {
-  if (!isStripeEnabled()) {
-    return res.status(503).json({ success: false, message: 'Stripe is not configured on the server.' });
-  }
+const initiateGroundEasypaisaPayment = asyncHandler(async (req, res) => {
   const booking = await GroundBooking.findOne({
     _id: req.params.id,
     bookedBy: req.user.id,
     bookedByRole: 'player',
     status: 'held',
-  });
+  }).populate('ground');
   if (!booking) return res.status(404).json({ success: false, message: 'Hold not found' });
   if (booking.holdExpiresAt < new Date()) {
     booking.status = 'cancelled';
     await booking.save();
     return res.status(410).json({ success: false, message: 'Hold expired' });
   }
-  const amountMinor = groundBookingAmountToMinor(booking.amount);
-  if (!isValidGroundBookingStripeAmount(booking.amount)) {
-    return res.status(400).json({
+  const ground = booking.ground;
+  if (!ground?.businessOwner) {
+    return res.status(400).json({ success: false, message: 'This ground is not available for online payment.' });
+  }
+  const payee = await getBusinessOwnerPaymentAccount(ground.businessOwner);
+  if (!payee) {
+    return res.status(503).json({
       success: false,
-      message: `Set booking amount to at least ${GROUND_BOOKING_MIN_PKR} PKR for card payment.`,
+      message: 'Ground owner has not linked an Easypaisa account yet. Try another venue.',
     });
   }
-  const stripe = getStripe();
-  const pi = await stripe.paymentIntents.create({
-    amount: amountMinor,
-    currency: GROUND_BOOKING_CURRENCY,
-    ...paymentIntentMethodSpec(),
-    metadata: {
+  if (!Number.isFinite(Number(booking.amount)) || booking.amount < 0) {
+    return res.status(400).json({ success: false, message: 'Invalid booking amount.' });
+  }
+  if (booking.amount === 0) {
+    return res.json({
+      success: true,
+      data: {
+        orderRef: generateOrderRef('GB-FREE'),
+        amount: 0,
+        currency: 'PKR',
+        payeeMobile: payee.mobile,
+        payeeTitle: payee.accountTitle,
+        mode: 'free',
+        instructions: 'No advance payment required for this slot.',
+      },
+    });
+  }
+
+  const orderRef = generateOrderRef('GB');
+  const session = buildEasypaisaCheckoutSession({
+    orderRef,
+    amount: booking.amount,
+    currency: 'PKR',
+    payeeMobile: payee.mobile,
+    payeeTitle: payee.accountTitle,
+  });
+
+  const existingPending = await Payment.findOne({
+    payer: req.user.id,
+    status: 'pending',
+    'meta.bookingId': String(booking._id),
+  });
+  if (existingPending) await Payment.deleteOne({ _id: existingPending._id });
+
+  await Payment.create({
+    payer: req.user.id,
+    payee: ground.businessOwner,
+    type: 'ground_booking',
+    amount: booking.amount,
+    status: 'pending',
+    externalRef: orderRef,
+    meta: {
+      paymentMethod: 'easypaisa',
       purpose: 'ground_booking',
-      bookedById: String(req.user.id),
-      bookedByRole: 'player',
+      orderRef,
       bookingId: String(booking._id),
-      amountMinor: String(amountMinor),
+      payeeMobile: payee.mobile,
+      payeeTitle: payee.accountTitle,
+      mockPayToken: session.mockPayToken,
     },
   });
-  res.json({
-    success: true,
-    data: { clientSecret: pi.client_secret, amount: booking.amount, currency: GROUND_BOOKING_CURRENCY },
-  });
+
+  res.json({ success: true, data: session });
 });
 
 const confirmGroundPayment = asyncHandler(async (req, res) => {
-  const { guestName, guestPhone, guestAddress, guestCity } = req.body;
+  const { guestName, guestPhone, guestAddress, guestCity, orderRef, easypaisaTxnId, mockPayToken } = req.body;
   const booking = await GroundBooking.findOne({
     _id: req.params.id,
     bookedBy: req.user.id,
@@ -778,62 +847,78 @@ const confirmGroundPayment = asyncHandler(async (req, res) => {
       message: 'Guest name and phone are required to confirm booking.',
     });
   }
+  if (!orderRef && booking.amount > 0) {
+    return res.status(400).json({ success: false, message: 'Payment reference is required.' });
+  }
   const groundId = booking.ground?._id || booking.ground;
-  const conflict = await hasOverlap(groundId, booking.startTime, booking.endTime, booking._id);
-  if (conflict) {
-    booking.status = 'cancelled';
-    await booking.save();
-    return res.status(409).json({ success: false, message: 'Slot no longer available' });
+
+  let paymentId;
+  let txnLabel = 'N/A';
+
+  if (booking.amount > 0) {
+    const pending = await Payment.findOne({
+      payer: req.user.id,
+      status: 'pending',
+      externalRef: orderRef,
+      'meta.bookingId': String(booking._id),
+      type: 'ground_booking',
+    });
+    if (!pending) {
+      return res.status(400).json({ success: false, message: 'Payment session not found. Start checkout again.' });
+    }
+
+    const verified = await verifyEasypaisaPayment({
+      orderRef,
+      txnId: easypaisaTxnId,
+      mockPayToken,
+      expectedAmount: booking.amount,
+      pendingMeta: pending.meta,
+    });
+
+    pending.status = 'completed';
+    pending.externalRef = verified.txnId;
+    pending.meta = {
+      ...pending.meta,
+      easypaisaTxnId: verified.txnId,
+      verifiedAt: new Date().toISOString(),
+      mode: verified.mode,
+    };
+    await pending.save();
+    paymentId = pending._id;
+    txnLabel = verified.txnId;
   }
 
-  let externalRef = 'cash-at-venue';
-  if (isStripeEnabled()) {
-    const { paymentIntentId } = req.body;
-    if (!paymentIntentId) {
-      return res.status(400).json({ success: false, message: 'paymentIntentId is required after card payment.' });
-    }
-    const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
-    if (
-      pi.metadata.purpose !== 'ground_booking' ||
-      pi.metadata.bookedById !== String(req.user.id) ||
-      pi.metadata.bookedByRole !== 'player' ||
-      pi.metadata.bookingId !== String(booking._id)
-    ) {
-      return res.status(400).json({ success: false, message: 'Invalid payment for this booking.' });
-    }
-    assertAmountMatches(pi, groundBookingAmountToMinor(booking.amount));
-    externalRef = paymentIntentId;
-  }
+  const paymentNote =
+    booking.amount > 0
+      ? `Easypaisa payment received — PKR ${booking.amount}. Txn: ${txnLabel}. Present your confirmation reference at the venue.`
+      : 'Booking confirmed — no advance payment required.';
 
-  const payment = await Payment.create({
-    payer: req.user.id,
-    type: 'ground_booking',
-    amount: booking.amount,
-    status: 'completed',
-    externalRef,
-  });
-  booking.payment = payment._id;
-  booking.status = 'confirmed';
-  booking.holdExpiresAt = undefined;
-  booking.confirmationToken = generateBookingToken();
-  booking.guestName = String(guestName).trim();
-  booking.guestPhone = String(guestPhone).trim();
-  booking.guestAddress = guestAddress ? String(guestAddress).trim() : undefined;
-  booking.guestCity = guestCity ? String(guestCity).trim() : undefined;
-  booking.paymentNote =
-    externalRef === 'cash-at-venue'
-      ? booking.amount > 0
-        ? `Pay PKR ${booking.amount} at the venue on arrival.`
-        : 'No advance payment — pay at venue if applicable.'
-      : `Card payment received (PKR ${booking.amount}). Present your confirmation reference at the venue.`;
-  await booking.save();
+  let confirmedBooking;
+  try {
+    confirmedBooking = await finalizeGroundBookingConfirm({
+      booking,
+      paymentId,
+      txnLabel,
+      guestName: String(guestName).trim(),
+      guestPhone: String(guestPhone).trim(),
+      guestAddress: guestAddress ? String(guestAddress).trim() : undefined,
+      guestCity: guestCity ? String(guestCity).trim() : undefined,
+      paymentNote,
+    });
+  } catch (e) {
+    if (e.statusCode === 409) {
+      booking.status = 'cancelled';
+      await booking.save();
+    }
+    return res.status(e.statusCode || 500).json({ success: false, message: e.message });
+  }
 
   const ground = booking.ground;
   if (ground?.businessOwner) {
     try {
       await notifyUser(ground.businessOwner, {
-        title: 'New ground booking',
-        body: `${booking.guestName} booked ${ground.name} for ${new Date(booking.startTime).toLocaleString()}. Ref: ${booking.confirmationToken}`,
+        title: confirmedBooking.amount > 0 ? 'New ground booking (paid)' : 'New ground booking',
+        body: `${confirmedBooking.guestName} (${confirmedBooking.guestPhone}) booked ${ground.name} for ${new Date(confirmedBooking.startTime).toLocaleString()}. Ref: ${confirmedBooking.confirmationToken}${confirmedBooking.amount > 0 ? `. Easypaisa: ${txnLabel}` : ''}`,
         category: 'booking',
         actionUrl: '/business/ground-bookings',
       });
@@ -842,7 +927,7 @@ const confirmGroundPayment = asyncHandler(async (req, res) => {
     }
   }
 
-  res.json({ success: true, data: booking });
+  res.json({ success: true, data: confirmedBooking });
 });
 
 const listMyGroundBookings = asyncHandler(async (req, res) => {
@@ -854,11 +939,33 @@ const listMyGroundBookings = asyncHandler(async (req, res) => {
 });
 
 const cancelGroundBooking = asyncHandler(async (req, res) => {
-  const b = await GroundBooking.findOne({ _id: req.params.id, bookedBy: req.user.id, bookedByRole: 'player' });
+  const b = await GroundBooking.findOne({
+    _id: req.params.id,
+    bookedBy: req.user.id,
+    bookedByRole: 'player',
+  }).populate('ground');
   if (!b) return res.status(404).json({ success: false, message: 'Booking not found' });
   if (b.status === 'cancelled') return res.json({ success: true, data: b });
+  if (b.status === 'confirmed' && new Date(b.startTime) < new Date()) {
+    return res.status(400).json({ success: false, message: 'Cannot cancel a past booking.' });
+  }
   b.status = 'cancelled';
   await b.save();
+
+  const ground = b.ground;
+  if (ground?.businessOwner) {
+    try {
+      await notifyUser(ground.businessOwner, {
+        title: 'Ground booking cancelled',
+        body: `${b.guestName || 'A player'} cancelled ${ground.name} (${new Date(b.startTime).toLocaleString()}). Slot is available again. Ref: ${b.confirmationToken || b._id}`,
+        category: 'booking',
+        actionUrl: '/business/ground-bookings',
+      });
+    } catch (e) {
+      console.warn('[notify][ground-booking-cancel] failed:', e.message);
+    }
+  }
+
   res.json({ success: true, data: b });
 });
 
@@ -876,26 +983,81 @@ const browseProducts = asyncHandler(async (req, res) => {
   if (req.query.sport) {
     const s = String(req.query.sport).toLowerCase();
     if (s === 'cricket' || s === 'badminton') {
-      filter.sportType = { $in: [s, 'general'] };
+      filter.sportType = s;
+    } else if (s === 'general') {
+      filter.sportType = 'general';
     } else {
       filter.sportType = s;
     }
   }
+  if (req.query.ownerId) filter.businessOwner = req.query.ownerId;
   if (req.query.q) filter.name = new RegExp(String(req.query.q).trim(), 'i');
   if (req.query.category) filter.category = new RegExp(String(req.query.category).trim(), 'i');
-  const list = await Product.find(filter).sort({ createdAt: -1 }).lean();
-  const data = list.map((p) => ({
+  const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 36, maxLimit: 100 });
+  const [list, total] = await Promise.all([
+    Product.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Product.countDocuments(filter),
+  ]);
+  const storeOwnerIds = [...new Set(list.map((p) => String(p.businessOwner)))];
+  const stores = storeOwnerIds.length
+    ? await BusinessProfile.find({ user: { $in: storeOwnerIds } })
+        .select('user storeName storeLogoUrl storeBannerUrl storeDescription businessName')
+        .lean()
+    : [];
+  const storeByOwner = new Map(stores.map((bp) => [String(bp.user), bp]));
+  const data = list.map((p) => {
+    const store = storeByOwner.get(String(p.businessOwner));
+    return {
+      ...p,
+      storeName: store?.storeName || store?.businessName || 'Store',
+      storeLogoUrl: store?.storeLogoUrl,
+      storeBannerUrl: store?.storeBannerUrl,
+      effectivePrice: effectiveProductPrice(p),
+      onSale: inSaleWindow(p) && (p.salePrice != null || (p.discountPercent != null && p.discountPercent > 0)),
+    };
+  });
+  res.json({
+    success: true,
+    data,
+    pagination: paginationMeta({ page, limit, total }),
+  });
+});
+
+const getBusinessStore = asyncHandler(async (req, res) => {
+  const ownerId = req.params.ownerId;
+  const user = await User.findById(ownerId).select('verificationStatus isSuspended role').lean();
+  if (!user || user.role !== 'business_owner' || user.verificationStatus !== 'verified' || user.isSuspended) {
+    return res.status(404).json({ success: false, message: 'Store not found' });
+  }
+  const store = await BusinessProfile.findOne({ user: ownerId })
+    .select('storeName storeDescription storeLogoUrl storeBannerUrl businessName shippingPolicyText returnPolicyText')
+    .lean();
+  if (!store) return res.status(404).json({ success: false, message: 'Store not found' });
+  const products = await Product.find({ businessOwner: ownerId, isActive: true }).sort({ createdAt: -1 }).lean();
+  const data = products.map((p) => ({
     ...p,
+    storeName: store.storeName || store.businessName || 'Store',
     effectivePrice: effectiveProductPrice(p),
     onSale: inSaleWindow(p) && (p.salePrice != null || (p.discountPercent != null && p.discountPercent > 0)),
   }));
-  res.json({ success: true, data });
+  res.json({
+    success: true,
+    data: {
+      ownerId,
+      store: {
+        storeName: store.storeName || store.businessName || 'Store',
+        storeDescription: store.storeDescription || '',
+        storeLogoUrl: store.storeLogoUrl,
+        storeBannerUrl: store.storeBannerUrl,
+        shippingPolicyText: store.shippingPolicyText,
+        returnPolicyText: store.returnPolicyText,
+      },
+      products: data,
+    },
+  });
 });
 
-const createOrderPaymentIntent = asyncHandler(async (req, res) => {
-  if (!isStripeEnabled()) {
-    return res.status(503).json({ success: false, message: 'Stripe is not configured on the server.' });
-  }
+const initiateOrderEasypaisaPayment = asyncHandler(async (req, res) => {
   const { items } = req.body;
   let ctx;
   try {
@@ -904,35 +1066,63 @@ const createOrderPaymentIntent = asyncHandler(async (req, res) => {
     const code = e.statusCode || 400;
     return res.status(code).json({ success: false, message: e.message });
   }
-  const totalCents = dollarsToCents(ctx.total);
-  if (totalCents < 50) {
-    return res.status(400).json({
+
+  const payee = await getBusinessOwnerPaymentAccount(ctx.ownerId);
+  if (!payee) {
+    return res.status(503).json({
       success: false,
-      message: 'Order total is below the minimum card charge (0.50 USD).',
+      message: 'Store has not linked an Easypaisa account for payments yet.',
     });
   }
-  const stripe = getStripe();
-  const pi = await stripe.paymentIntents.create({
-    amount: totalCents,
-    currency: 'usd',
-    ...paymentIntentMethodSpec(),
-    metadata: {
+
+  const orderRef = generateOrderRef('ORD');
+  const session = buildEasypaisaCheckoutSession({
+    orderRef,
+    amount: ctx.total,
+    currency: 'PKR',
+    payeeMobile: payee.mobile,
+    payeeTitle: payee.accountTitle,
+  });
+
+  const existingPending = await Payment.findOne({
+    payer: req.user.id,
+    status: 'pending',
+    'meta.itemHash': ctx.itemHash,
+    type: 'product',
+  });
+  if (existingPending) await Payment.deleteOne({ _id: existingPending._id });
+
+  await Payment.create({
+    payer: req.user.id,
+    payee: ctx.ownerId,
+    type: 'product',
+    amount: ctx.total,
+    status: 'pending',
+    externalRef: orderRef,
+    meta: {
+      paymentMethod: 'easypaisa',
       purpose: 'product_order',
-      playerId: String(req.user.id),
+      orderRef,
       itemHash: ctx.itemHash,
-      payee: String(ctx.ownerId),
-      totalCents: String(totalCents),
+      payeeMobile: payee.mobile,
+      payeeTitle: payee.accountTitle,
+      mockPayToken: session.mockPayToken,
     },
   });
-  res.json({
-    success: true,
-    data: { clientSecret: pi.client_secret, amount: ctx.total, currency: 'usd' },
-  });
+
+  res.json({ success: true, data: { ...session, itemHash: ctx.itemHash } });
 });
 
 const createOrder = asyncHandler(async (req, res) => {
-  const { items, shippingAddress, customerNote, cardLast4, paymentIntentId, paymentMethod = 'cod' } =
-    req.body;
+  const {
+    items,
+    shippingAddress,
+    customerNote,
+    paymentMethod = 'easypaisa',
+    orderRef,
+    easypaisaTxnId,
+    mockPayToken,
+  } = req.body;
   let ctx;
   try {
     ctx = await buildProductOrderContext(items);
@@ -941,110 +1131,98 @@ const createOrder = asyncHandler(async (req, res) => {
     return res.status(code).json({ success: false, message: e.message });
   }
 
+  const ship = shippingAddress || {};
+  if (!ship.fullName?.trim() || !ship.line1?.trim() || !ship.city?.trim() || !ship.phone?.trim()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Delivery requires full name, address, city, and phone.',
+    });
+  }
+
   const invoiceRef = `INV-${Date.now()}`;
-  let externalRef = 'mock-gateway';
-  let meta = { invoiceRef };
-  let paymentStatus = 'completed';
-  let orderStatus = 'paid';
 
-  if (paymentMethod === 'cod') {
-    const ship = shippingAddress || {};
-    if (!ship.fullName?.trim() || !ship.line1?.trim() || !ship.city?.trim() || !ship.phone?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cash on delivery requires full name, address, city, and phone.',
-      });
+  if (paymentMethod === 'easypaisa') {
+    if (!orderRef) {
+      return res.status(400).json({ success: false, message: 'Payment reference is required.' });
     }
-    externalRef = `cod-${Date.now()}`;
-    meta = { paymentMethod: 'cod', invoiceRef };
-    paymentStatus = 'pending';
-    orderStatus = 'pending';
-  } else if (paymentMethod === 'stripe' && isStripeEnabled()) {
-    if (!paymentIntentId) {
-      return res.status(400).json({
-        success: false,
-        message: 'paymentIntentId is required. Complete Stripe payment first.',
-      });
+    const pending = await Payment.findOne({
+      payer: req.user.id,
+      status: 'pending',
+      externalRef: orderRef,
+      type: 'product',
+      'meta.itemHash': ctx.itemHash,
+    });
+    if (!pending) {
+      return res.status(400).json({ success: false, message: 'Payment session not found. Start checkout again.' });
     }
-    const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
-    if (pi.metadata.purpose !== 'product_order' || pi.metadata.playerId !== String(req.user.id)) {
-      return res.status(400).json({ success: false, message: 'Invalid payment for this order.' });
-    }
-    if (pi.metadata.itemHash !== ctx.itemHash) {
-      return res.status(400).json({ success: false, message: 'Cart does not match completed payment.' });
-    }
-    if (pi.metadata.payee !== String(ctx.ownerId)) {
-      return res.status(400).json({ success: false, message: 'Invalid payment recipient.' });
-    }
-    assertAmountMatches(pi, dollarsToCents(ctx.total));
-    externalRef = paymentIntentId;
-    meta = {
-      paymentMethod: 'stripe',
-      stripePaymentIntentId: paymentIntentId,
+    const verified = await verifyEasypaisaPayment({
+      orderRef,
+      txnId: easypaisaTxnId,
+      mockPayToken,
+      expectedAmount: ctx.total,
+      pendingMeta: pending.meta,
+    });
+    pending.status = 'completed';
+    pending.externalRef = verified.txnId;
+    pending.meta = {
+      ...pending.meta,
+      easypaisaTxnId: verified.txnId,
+      verifiedAt: new Date().toISOString(),
+      mode: verified.mode,
       invoiceRef,
     };
-  } else if (paymentMethod === 'mock' && !isStripeEnabled()) {
-    meta = {
-      paymentMethod: 'mock',
-      cardLast4: cardLast4 || 'mock',
-      invoiceRef,
-    };
-  } else {
-    return res.status(400).json({ success: false, message: 'Invalid or unsupported payment method.' });
-  }
+    await pending.save();
 
-  const payment = await Payment.create({
-    payer: req.user.id,
-    payee: ctx.ownerId,
-    type: 'product',
-    amount: ctx.total,
-    status: paymentStatus,
-    externalRef,
-    meta,
-  });
+    const payment = pending;
 
-  for (let i = 0; i < items.length; i++) {
-    const line = items[i];
-    const qty = line.quantity || 1;
-    const updated = await Product.findByIdAndUpdate(
-      line.productId,
-      { $inc: { stock: -qty } },
-      { new: true }
-    );
-    const th = updated.lowStockThreshold ?? 5;
-    if (updated.stock <= th) {
+    let orderResult;
+    try {
+      orderResult = await finalizeProductOrder({
+        payerId: req.user.id,
+        ownerId: ctx.ownerId,
+        items,
+        lineDocs: ctx.lineDocs,
+        total: ctx.total,
+        paymentId: payment._id,
+        shippingAddress: ship,
+        customerNote: customerNote || undefined,
+      });
+    } catch (e) {
+      return res.status(e.statusCode || 500).json({ success: false, message: e.message });
+    }
+
+    for (const updated of orderResult.stockUpdates) {
+      const th = updated.lowStockThreshold ?? 5;
+      if (updated.stock <= th) {
+        await notifyUser(ctx.ownerId, {
+          title: 'Low stock alert',
+          body: `${updated.name} is at or below threshold (${th} left).`,
+          category: 'inventory',
+        });
+      }
+    }
+
+    const order = orderResult.order;
+
+    try {
       await notifyUser(ctx.ownerId, {
-        title: 'Low stock alert',
-        body: `${updated.name} is at or below threshold (${th} left).`,
-        category: 'inventory',
+        title: 'New paid order',
+        body: `${ship.fullName} placed order ${invoiceRef} — PKR ${ctx.total}. Easypaisa: ${verified.txnId}. Phone: ${ship.phone}`,
+        category: 'order',
+        actionUrl: '/business/orders',
       });
+    } catch (e) {
+      console.warn('[notify][product-order-owner] failed:', e.message);
     }
+
+    const enriched = await enrichOrderItemsWithImages(order.toObject());
+    return res.status(201).json({ success: true, data: enriched });
   }
 
-  const order = await Order.create({
-    player: req.user.id,
-    businessOwner: ctx.ownerId,
-    items: ctx.lineDocs,
-    totalAmount: ctx.total,
-    status: orderStatus,
-    paymentMethod,
-    payment: payment._id,
-    shippingAddress: shippingAddress || undefined,
-    customerNote: customerNote || undefined,
+  return res.status(400).json({
+    success: false,
+    message: 'Online Easypaisa payment is required. Cash on delivery is no longer supported.',
   });
-
-  const notifyBody =
-    paymentMethod === 'cod'
-      ? `New cash-on-delivery order — collect PKR ${ctx.total} on delivery.`
-      : `Order received — total PKR ${ctx.total}`;
-
-  await notifyUser(ctx.ownerId, {
-    title: 'New order',
-    body: notifyBody,
-    category: 'order',
-  });
-
-  res.status(201).json({ success: true, data: order });
 });
 
 const createCoachPaymentIntent = asyncHandler(async (req, res) => {
@@ -1237,13 +1415,14 @@ module.exports = {
   listTrainingSessions,
   listTrainingPlans,
   holdGroundBooking,
-  createGroundBookingPaymentIntent,
+  initiateGroundEasypaisaPayment,
   confirmGroundPayment,
   listMyGroundBookings,
   cancelGroundBooking,
   getPerformance,
   browseProducts,
-  createOrderPaymentIntent,
+  getBusinessStore,
+  initiateOrderEasypaisaPayment,
   createOrder,
   listMyOrders,
   submitCoachFeedback,

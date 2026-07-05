@@ -26,6 +26,8 @@ const nav = {
   ],
   business_owner: [
     { to: '/business', end: true, label: 'Dashboard' },
+    { to: '/business/payment', label: 'Payment account' },
+    { to: '/business/store', label: 'Store setup' },
     { to: '/business/products', label: 'Products' },
     { to: '/business/grounds', label: 'Grounds' },
     { to: '/business/ground-bookings', label: 'Ground bookings' },

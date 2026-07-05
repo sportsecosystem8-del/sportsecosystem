@@ -1,8 +1,6 @@
 const GENERAL_CATEGORY = 'General';
 const GENERAL_FITNESS_SKILL = 'Fitness / stamina';
 const GENERAL_ATTITUDE_SKILL = 'Attitude & coachability';
-const FOOTBALL_FITNESS_SKILL = 'Speed / acceleration';
-const FOOTBALL_ATTITUDE_SKILL = 'Attitude & communication';
 
 function roundScore(n) {
   if (n == null || Number.isNaN(Number(n))) return null;
@@ -43,16 +41,6 @@ function deriveLegacyScores(skillScores, sport) {
 
   let fitness = findSkillScore(skillScores, GENERAL_CATEGORY, GENERAL_FITNESS_SKILL);
   let attitude = findSkillScore(skillScores, GENERAL_CATEGORY, GENERAL_ATTITUDE_SKILL);
-
-  if (sport === 'football') {
-    fitness =
-      average([
-        findSkillScore(skillScores, 'Physical & mental', FOOTBALL_FITNESS_SKILL),
-        findSkillScore(skillScores, 'Physical & mental', 'Agility / change of direction'),
-        findSkillScore(skillScores, 'Physical & mental', 'Work rate / pressing'),
-      ]) ?? fitness;
-    attitude = findSkillScore(skillScores, 'Physical & mental', FOOTBALL_ATTITUDE_SKILL) ?? attitude;
-  }
 
   const overallScore = average((skillScores || []).map((r) => r.score));
 

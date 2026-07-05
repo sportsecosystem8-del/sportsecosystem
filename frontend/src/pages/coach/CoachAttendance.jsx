@@ -55,7 +55,9 @@ function formatMarkedAt(iso) {
 
 function AttendanceRow({ record }) {
   const player = playerFromRecord(record);
-  const window = record.session?.scheduledAt ? sessionWindow(record.session.scheduledAt) : null;
+  const window = record.session?.scheduledAt
+    ? sessionWindow(record.session.scheduledAt, record.session.durationMinutes ?? 60)
+    : null;
   const present = record.present === true;
 
   return (
@@ -115,7 +117,8 @@ function AttendanceRow({ record }) {
                     })}
                     <span className="mt-0.5 block text-xs text-slate-400">
                       {window.start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} –{' '}
-                      {window.end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · 90 min
+                      {window.end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} ·{' '}
+                      {record.session?.durationMinutes ?? 60} min
                     </span>
                   </>
                 ) : (

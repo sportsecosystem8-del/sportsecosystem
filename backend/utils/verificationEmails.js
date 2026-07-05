@@ -1,7 +1,8 @@
 const { sendMail, isMailerConfigured } = require('./mailer');
+const { getPublicAppUrlForEmailLinks } = require('./publicAppUrl');
 
 function frontendBaseUrl() {
-  return process.env.APP_BASE_URL || 'http://localhost:5173';
+  return getPublicAppUrlForEmailLinks();
 }
 
 function loginUrl() {

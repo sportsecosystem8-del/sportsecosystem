@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
+import EasypaisaPaySection from '../../components/payment/EasypaisaPaySection';
 import { playerBtnOutlineSm, playerBtnPrimary } from '../../components/player/playerClassNames';
 import ProductImage from '../../components/ProductImage';
 import { formatProductPrice } from '../../utils/productCurrency';
@@ -15,13 +17,15 @@ const SHIPPING_FIELDS = [
   { key: 'postalCode', label: 'Postal code', required: false },
 ];
 
-/** Browse, filter, cart, cash-on-delivery checkout */
+/** Browse, filter, cart, Easypaisa checkout to store owner */
 export default function PlayerShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [sport, setSport] = useState('');
+  const [profileSport, setProfileSport] = useState('');
+  const sportLocked = Boolean(profileSport);
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
@@ -34,6 +38,7 @@ export default function PlayerShop() {
   });
   const [note, setNote] = useState('');
   const [placing, setPlacing] = useState(false);
+  const [paySession, setPaySession] = useState(null);
 
   const params = useMemo(() => {
     const p = {};
@@ -59,7 +64,10 @@ export default function PlayerShop() {
       .get('/players/me/profile')
       .then((r) => {
         const sp = r.data?.data?.sportPreference;
-        if (sp) setSport(sp);
+        if (sp) {
+          setSport(sp);
+          setProfileSport(sp);
+        }
       })
       .catch(() => {});
   }, []);
@@ -85,7 +93,25 @@ export default function PlayerShop() {
     }, 0);
   }, [cartLines]);
 
-  const placeCodOrder = async () => {
+  const shippingValid =
+    ship.fullName.trim() && ship.line1.trim() && ship.city.trim() && ship.phone.trim();
+
+  useEffect(() => {
+    const items = cartItems();
+    if (!showCheckout || !items.length || !shippingValid) {
+      setPaySession(null);
+      return;
+    }
+    api
+      .post('/players/orders/easypaisa/initiate', { items })
+      .then((r) => setPaySession(r.data?.data || null))
+      .catch((e) => {
+        setPaySession(null);
+        setErr(getErrorMessage(e));
+      });
+  }, [showCheckout, cart, ship, shippingValid]);
+
+  const placePaidOrder = async (paymentPayload) => {
     const items = cartItems();
     if (!items.length) return;
     setErr('');
@@ -94,15 +120,18 @@ export default function PlayerShop() {
     try {
       await api.post('/players/orders', {
         items,
-        paymentMethod: 'cod',
+        paymentMethod: 'easypaisa',
         shippingAddress: ship,
         customerNote: note || undefined,
+        ...paymentPayload,
       });
       setCart({});
       setShowCheckout(false);
-      setOk('Order placed! Pay cash when your order is delivered.');
+      setPaySession(null);
+      setOk('Order placed! Payment sent to the store owner via Easypaisa. Check My Orders for details.');
     } catch (e) {
       setErr(getErrorMessage(e));
+      throw e;
     } finally {
       setPlacing(false);
     }
@@ -138,11 +167,11 @@ export default function PlayerShop() {
           className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
           value={sport}
           onChange={(e) => setSport(e.target.value)}
+          disabled={sportLocked}
         >
-          <option value="">All sports</option>
+          {!sportLocked ? <option value="">All sports</option> : null}
           <option value="cricket">Cricket</option>
           <option value="badminton">Badminton</option>
-          <option value="general">General</option>
         </select>
       </div>
 
@@ -151,6 +180,9 @@ export default function PlayerShop() {
           <PlayerCard key={p._id} className="overflow-hidden p-0">
             <ProductImage product={p} className="h-44 w-full object-cover" placeholderClassName="h-44 w-full" />
             <div className="p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-player-green">
+                {p.storeName || 'Store'}
+              </p>
               <p className="text-lg font-bold text-white">{p.name}</p>
               <p className="text-sm text-player-on-variant">
                 {p.sportType}
@@ -168,9 +200,17 @@ export default function PlayerShop() {
                 )}{' '}
                 · Stock {p.stock}
               </p>
-              <button type="button" onClick={() => add(p._id)} className={`${playerBtnOutlineSm} mt-4 w-full`}>
+              <button type="button" onClick={() => add(p._id)} className={`${playerBtnOutlineSm} mt-3 w-full`}>
                 Add to cart ({cart[p._id] || 0})
               </button>
+              {p.businessOwner ? (
+                <Link
+                  to={`/player/shop/store/${p.businessOwner}`}
+                  className="mt-2 block text-center text-xs font-semibold uppercase tracking-wider text-slate-400 underline hover:text-player-green"
+                >
+                  Visit store
+                </Link>
+              ) : null}
             </div>
           </PlayerCard>
         ))}
@@ -239,17 +279,25 @@ export default function PlayerShop() {
 
           <div className="space-y-3 border-t border-white/10 pt-4">
             <p className="text-xs text-slate-400">
-              Pay with <span className="font-semibold text-white">cash on delivery (COD)</span>. The store will
-              deliver to your address — hand over {formatProductPrice(cartTotal)} when you receive the order.
+              Pay with <span className="font-semibold text-white">Easypaisa</span> — payment goes directly to the
+              store owner&apos;s linked account.
             </p>
-            <button
-              type="button"
-              disabled={placing || !cartItems().length}
-              onClick={placeCodOrder}
-              className={playerBtnPrimary}
-            >
-              {placing ? 'Placing order…' : 'Place order (Cash on Delivery)'}
-            </button>
+            {shippingValid && cartItems().length ? (
+              paySession ? (
+                <EasypaisaPaySection
+                  session={paySession}
+                  busy={placing}
+                  onConfirm={placePaidOrder}
+                  onError={(msg) => setErr(msg)}
+                  amountFormatter={(amount) => formatProductPrice(amount)}
+                  submitLabel="Verify & place order"
+                />
+              ) : (
+                <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
+              )
+            ) : (
+              <p className="text-xs text-slate-500">Fill delivery details to pay.</p>
+            )}
           </div>
         </div>
       ) : null}
