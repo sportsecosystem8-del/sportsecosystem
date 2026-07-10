@@ -8,6 +8,7 @@ import { previewVerificationDocumentError } from '../../utils/verificationDocume
 import CoachAvatar from '../../components/CoachAvatar';
 import CoachLocationLines from '../../components/player/CoachLocationLines';
 import CoachProfileDetailModal from '../../components/player/CoachProfileDetailModal';
+import ModalPortal from '../../components/shared/ModalPortal';
 import { playerLocationOrigin } from '../../utils/coachLocation';
 import { playerCoachesSubtitle, sportFilterBadge } from '../../utils/sportDisplay';
 import { api, getErrorMessage } from '../../services/api';
@@ -296,16 +297,16 @@ export default function PlayerCoaches() {
         onDownload={docPreview.download}
       />
 
-      {certPicker ? (
+      <ModalPortal open={Boolean(certPicker)}>
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 pt-[env(safe-area-inset-top)] sm:items-center sm:p-4 sm:pt-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="cert-picker-title"
           onClick={() => setCertPicker(null)}
         >
           <div
-            className="max-h-[85dvh] w-full overflow-hidden rounded-t-2xl border border-white/10 bg-player-container p-4 shadow-xl sm:max-w-md sm:rounded-xl sm:p-5"
+            className="max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] w-full overflow-hidden rounded-t-2xl border border-white/10 bg-player-container p-4 shadow-xl sm:max-h-[85dvh] sm:max-w-md sm:rounded-xl sm:p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <p id="cert-picker-title" className="font-headline text-xs font-bold uppercase tracking-wider text-player-green">
@@ -313,7 +314,7 @@ export default function PlayerCoaches() {
             </p>
             <p className="mt-1 text-sm text-player-on-variant">Select a document to open.</p>
             <ul className="mt-4 max-h-[50dvh] space-y-2 overflow-y-auto sm:max-h-64">
-              {certPicker.docs.map((doc) => (
+              {certPicker?.docs.map((doc) => (
                 <li key={doc._id}>
                   <button
                     type="button"
@@ -337,7 +338,7 @@ export default function PlayerCoaches() {
             </button>
           </div>
         </div>
-      ) : null}
+      </ModalPortal>
 
       <CoachProfileDetailModal
         open={Boolean(detailCoach)}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, getErrorMessage } from '../../services/api';
 import ProductImage from '../../components/ProductImage';
 import { formatProductPrice } from '../../utils/productCurrency';
+import { publicAssetUrl } from '../../utils/assetUrl';
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-[#cc97ff]/50 focus:outline-none focus:ring-1 focus:ring-[#cc97ff]/40';
@@ -131,6 +132,16 @@ export default function BusinessProducts() {
     try {
       await api.delete(`/business/products/${id}`);
       await Promise.all([loadMine(), loadGate()]);
+    } catch (er) {
+      alert(getErrorMessage(er));
+    }
+  };
+
+  const removeProductImage = async (productId, url) => {
+    if (!window.confirm('Remove this product photo?')) return;
+    try {
+      await api.delete(`/business/products/${productId}/images`, { data: { url } });
+      await loadMine();
     } catch (er) {
       alert(getErrorMessage(er));
     }
@@ -268,7 +279,16 @@ export default function BusinessProducts() {
                 onChange={(e) => setImageFile(e.target.files?.[0] || null)}
               />
               {imageFile ? (
-                <p className="mt-2 text-xs text-[#cc97ff]">Selected: {imageFile.name}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-[#cc97ff]">Selected: {imageFile.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => setImageFile(null)}
+                    className="rounded bg-red-600/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-red-400 hover:bg-red-600/30"
+                  >
+                    Remove
+                  </button>
+                </div>
               ) : (
                 <p className="mt-2 text-xs text-slate-500">JPG or PNG — shown on your storefront.</p>
               )}
@@ -412,6 +432,25 @@ export default function BusinessProducts() {
                       <p className="mt-0.5 text-[10px] text-slate-500">Alert at ≤{p.lowStockThreshold ?? 5}</p>
                     </div>
                   </div>
+                  {p.images?.length ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {p.images.map((url) => (
+                        <div key={url} className="relative">
+                          <img src={publicAssetUrl(url)} alt="" className="h-16 w-16 rounded object-cover" />
+                          {(p.images?.length || 0) > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => removeProductImage(p._id, url)}
+                              className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-[10px] text-white"
+                              aria-label="Remove photo"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <label className="mt-4 block text-[10px] uppercase tracking-wider text-slate-500">
                     {p.images?.length ? 'Add another photo' : 'Add photo'}
                   </label>

@@ -633,6 +633,16 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
   res.json({ success: true, data: profile });
 });
 
+const removeProfilePhoto = asyncHandler(async (req, res) => {
+  const profile = await CoachProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { $unset: { profilePhotoUrl: '' } },
+    { new: true }
+  );
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: profile });
+});
+
 const uploadAcademyPhoto = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
@@ -1861,6 +1871,7 @@ module.exports = {
   listNotifications,
   uploadDocumentMeta,
   uploadProfilePhoto,
+  removeProfilePhoto,
   uploadAcademyPhoto,
   removeAcademyPhoto,
   listDocuments,

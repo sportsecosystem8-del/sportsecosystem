@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import CoachAvatar from '../CoachAvatar';
+import ModalPortal from '../shared/ModalPortal';
 import CoachLocationLines from './CoachLocationLines';
 import { playerBtnOutlineSm, playerBtnSm } from './playerClassNames';
 import { slotsToWeeklyPattern } from '../shared/WeeklyDaysTimeEditor';
@@ -64,24 +65,23 @@ export default function CoachProfileDetailModal({
       .finally(() => setLoading(false));
   }, [open, coachId, coachRow]);
 
-  if (!open) return null;
-
   const p = profile || {};
   const availability = formatWeeklyAvailability(p.availability);
   const academyPhotos = Array.isArray(p.academyImageUrls) ? p.academyImageUrls : [];
   const levels = (p.preferredPlayerLevels || []).map((l) => l.charAt(0).toUpperCase() + l.slice(1)).join(', ');
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
+    <ModalPortal open={open}>
       <div
-        className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-player-container shadow-2xl sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-0 pt-[env(safe-area-inset-top)] sm:items-center sm:p-4 sm:pt-4"
+        role="dialog"
+        aria-modal="true"
+        onClick={onClose}
       >
+        <div
+          className="flex max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-player-container shadow-2xl sm:max-h-[92dvh] sm:rounded-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
           <div className="flex gap-4">
             <CoachAvatar profile={p} name={p.fullName} size="xl" />
@@ -230,5 +230,6 @@ export default function CoachProfileDetailModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

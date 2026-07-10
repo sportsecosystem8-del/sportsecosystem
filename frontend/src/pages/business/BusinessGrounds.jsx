@@ -58,6 +58,10 @@ export default function BusinessGrounds() {
     if (uploaded.length) setImagePaths((prev) => [...prev, ...uploaded]);
   };
 
+  const removeImage = (index) => {
+    setImagePaths((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!isVerified) {
@@ -166,8 +170,18 @@ export default function BusinessGrounds() {
           <label className="text-xs uppercase text-slate-500">Photos ({MIN_IMAGES}+ required)</label>
           <input type="file" accept="image/*" multiple className="mt-1 text-sm text-slate-400" onChange={(e) => uploadFiles(Array.from(e.target.files || []))} />
           <div className="mt-2 flex flex-wrap gap-2">
-            {imagePaths.map((p) => (
-              <img key={p} src={publicAssetUrl(p)} alt="" className="h-16 w-16 rounded object-cover" />
+            {imagePaths.map((p, i) => (
+              <div key={`${p}-${i}`} className="relative">
+                <img src={publicAssetUrl(p)} alt="" className="h-16 w-16 rounded object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeImage(i)}
+                  className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-[10px] text-white"
+                  aria-label="Remove photo"
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         </div>

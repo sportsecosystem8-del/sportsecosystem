@@ -70,6 +70,19 @@ export default function BusinessStoreSettings() {
     e.target.value = '';
   };
 
+  const removeBrand = async (endpoint, field) => {
+    if (!window.confirm('Remove this image?')) return;
+    setErr('');
+    try {
+      await api.delete(endpoint);
+      if (field === 'storeLogoUrl') setStoreLogoUrl('');
+      if (field === 'storeBannerUrl') setStoreBannerUrl('');
+      setMsg('Image removed.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    }
+  };
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -104,14 +117,34 @@ export default function BusinessStoreSettings() {
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Logo</label>
             {storeLogoUrl ? (
-              <img src={publicAssetUrl(storeLogoUrl)} alt="" className="mt-2 h-16 w-16 rounded-lg object-cover" />
+              <div className="relative mt-2 inline-block">
+                <img src={publicAssetUrl(storeLogoUrl)} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeBrand('/business/store/logo', 'storeLogoUrl')}
+                  className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-[10px] text-white"
+                  aria-label="Remove logo"
+                >
+                  ×
+                </button>
+              </div>
             ) : null}
             <input type="file" accept="image/*" className="mt-2 text-xs text-slate-400" onChange={(e) => uploadBrand(e, '/business/store/logo', 'storeLogoUrl')} />
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Banner</label>
             {storeBannerUrl ? (
-              <img src={publicAssetUrl(storeBannerUrl)} alt="" className="mt-2 h-20 w-full rounded-lg object-cover" />
+              <div className="relative mt-2">
+                <img src={publicAssetUrl(storeBannerUrl)} alt="" className="h-20 w-full rounded-lg object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeBrand('/business/store/banner', 'storeBannerUrl')}
+                  className="absolute right-1 top-1 rounded-full bg-red-600 px-1.5 text-[10px] text-white"
+                  aria-label="Remove banner"
+                >
+                  ×
+                </button>
+              </div>
             ) : null}
             <input type="file" accept="image/*" className="mt-2 text-xs text-slate-400" onChange={(e) => uploadBrand(e, '/business/store/banner', 'storeBannerUrl')} />
           </div>

@@ -19,6 +19,7 @@ r.put(
   p.updateProfile
 );
 r.post('/me/profile-photo', uploadImage.single('image'), p.uploadProfilePhoto);
+r.delete('/me/profile-photo', p.removeProfilePhoto);
 r.get('/recommendations', [query('limit').optional().isInt({ min: 3, max: 5 })], p.getRecommendations);
 r.get('/coaches/:coachId/profile', p.getCoachPublicProfile);
 r.get('/coaches/:coachId/feedback', p.listCoachPublicFeedback);

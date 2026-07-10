@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import ModalPortal from './shared/ModalPortal';
 
 export default function DocumentPreviewModal({
   open,
@@ -9,23 +9,15 @@ export default function DocumentPreviewModal({
   onClose,
   onDownload,
 }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
   if (!open || !blobUrl) return null;
 
   const isPdf = mimeType === 'application/pdf';
   const isImage = mimeType?.startsWith('image/');
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/85 sm:items-center sm:p-4"
+    <ModalPortal open={open}>
+      <div
+        className="fixed inset-0 z-[100] flex items-end justify-center bg-black/85 pt-[env(safe-area-inset-top)] sm:items-center sm:p-4 sm:pt-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="doc-preview-title"
@@ -115,5 +107,6 @@ export default function DocumentPreviewModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

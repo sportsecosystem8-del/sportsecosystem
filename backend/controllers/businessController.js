@@ -280,6 +280,26 @@ const uploadStoreBanner = asyncHandler(async (req, res) => {
   res.json({ success: true, data: bp });
 });
 
+const removeStoreLogo = asyncHandler(async (req, res) => {
+  const bp = await BusinessProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { $unset: { storeLogoUrl: '' } },
+    { new: true }
+  );
+  if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: bp });
+});
+
+const removeStoreBanner = asyncHandler(async (req, res) => {
+  const bp = await BusinessProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { $unset: { storeBannerUrl: '' } },
+    { new: true }
+  );
+  if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: bp });
+});
+
 /** Change subscription tier with downgrade guard */
 const changeSubscription = asyncHandler(async (req, res) => {
   const { package: pkg, paymentIntentId } = req.body;
@@ -460,6 +480,26 @@ const addProductImage = asyncHandler(async (req, res) => {
     { new: true }
   );
   if (!p) return res.status(404).json({ success: false, message: 'Not found' });
+  res.json({ success: true, data: p });
+});
+
+const removeProductImage = asyncHandler(async (req, res) => {
+  const url = String(req.body?.url || '').trim();
+  if (!url) return res.status(400).json({ success: false, message: 'url is required' });
+  const p = await Product.findOne({ _id: req.params.id, businessOwner: req.user.id });
+  if (!p) return res.status(404).json({ success: false, message: 'Not found' });
+  const images = (p.images || []).filter(Boolean);
+  if (!images.includes(url)) {
+    return res.status(400).json({ success: false, message: 'Image not found on this product' });
+  }
+  if (images.length <= 1) {
+    return res.status(400).json({
+      success: false,
+      message: 'Product must keep at least one photo. Upload a replacement first, or delete the product.',
+    });
+  }
+  p.images = images.filter((img) => img !== url);
+  await p.save();
   res.json({ success: true, data: p });
 });
 
@@ -713,6 +753,8 @@ module.exports = {
   updateStore,
   uploadStoreLogo,
   uploadStoreBanner,
+  removeStoreLogo,
+  removeStoreBanner,
   listMyProducts,
   addProduct,
   updateProduct,
@@ -720,6 +762,7 @@ module.exports = {
   patchPricing,
   patchStock,
   addProductImage,
+  removeProductImage,
   listOrders,
   updateOrderStatus,
   salesReport,

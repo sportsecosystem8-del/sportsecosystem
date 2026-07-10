@@ -27,7 +27,9 @@ r.put(
 );
 r.put('/store', b.updateStore);
 r.post('/store/logo', uploadImage.single('image'), b.uploadStoreLogo);
+r.delete('/store/logo', b.removeStoreLogo);
 r.post('/store/banner', uploadImage.single('image'), b.uploadStoreBanner);
+r.delete('/store/banner', b.removeStoreBanner);
 r.get('/products', b.listMyProducts);
 r.post('/products', b.addProduct);
 r.put('/products/:id', b.updateProduct);
@@ -35,6 +37,12 @@ r.delete('/products/:id', b.deleteProduct);
 r.patch('/products/:id/pricing', [body('price').isFloat({ min: 0 })], b.patchPricing);
 r.patch('/products/:id/stock', [body('stock').isInt({ min: 0 })], b.patchStock);
 r.post('/products/:id/images', upload.single('image'), b.addProductImage);
+r.delete(
+  '/products/:id/images',
+  [body('url').trim().notEmpty()],
+  validateRequest,
+  b.removeProductImage
+);
 r.get('/orders', b.listOrders);
 r.patch(
   '/orders/:id',

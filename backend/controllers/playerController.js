@@ -348,6 +348,16 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
   res.json({ success: true, data: profile });
 });
 
+const removeProfilePhoto = asyncHandler(async (req, res) => {
+  const profile = await PlayerProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { $unset: { profilePhotoUrl: '' } },
+    { new: true }
+  );
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: profile });
+});
+
 /** Automated coach recommendation (sport, skill, location); verified coaches only */
 const getRecommendations = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -1405,6 +1415,7 @@ module.exports = {
   getProfile,
   updateProfile,
   uploadProfilePhoto,
+  removeProfilePhoto,
   getRecommendations,
   listCoachCertificates,
   streamCoachCertificateFile,

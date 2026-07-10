@@ -133,6 +133,24 @@ export default function CoachProfile() {
     }
   };
 
+  const removePhoto = async () => {
+    if (!profile?.profilePhotoUrl) return;
+    if (!window.confirm('Remove your profile photo?')) return;
+    setUploading(true);
+    setErr('');
+    setMsg('');
+    try {
+      const { data } = await api.delete('/coaches/me/profile-photo');
+      setProfile(data.data);
+      setPhotoVersion(Date.now());
+      setMsg('Profile photo removed.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const onAcademyPhotos = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
@@ -199,6 +217,16 @@ export default function CoachProfile() {
                 disabled={uploading}
               />
             </label>
+            {profile?.profilePhotoUrl ? (
+              <button
+                type="button"
+                onClick={removePhoto}
+                disabled={uploading}
+                className="mt-2 block text-xs font-bold uppercase tracking-wider text-red-400 hover:text-red-300 disabled:opacity-50"
+              >
+                Remove photo
+              </button>
+            ) : null}
             <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-500">JPG, PNG, or WebP · max 8 MB</p>
           </div>
         </div>
