@@ -70,6 +70,8 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
   const [hold, setHold] = useState(null);
   const [guest, setGuest] = useState({ fullName: '', phone: '', address: '', city: '' });
   const [paySession, setPaySession] = useState(null);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payErr, setPayErr] = useState('');
   const [confirmed, setConfirmed] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -128,20 +130,33 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
   const loadPaySession = useCallback(() => {
     if (!hold?._id) {
       setPaySession(null);
+      setPayErr('');
+      setPayLoading(false);
       return;
     }
+    setPayLoading(true);
+    setPayErr('');
     api
       .post(`/players/ground-bookings/${hold._id}/easypaisa/initiate`)
-      .then((r) => setPaySession(r.data?.data || null))
+      .then((r) => {
+        const session = r.data?.data || null;
+        setPaySession(session);
+        if (!session) setPayErr('Could not load payment account details.');
+      })
       .catch((e) => {
         setPaySession(null);
-        setErr(getErrorMessage(e));
-      });
+        const msg = getErrorMessage(e);
+        setPayErr(msg);
+        setErr(msg);
+      })
+      .finally(() => setPayLoading(false));
   }, [hold?._id]);
 
   useEffect(() => {
     if (!hold?._id || !guest.fullName.trim() || !guest.phone.trim()) {
       setPaySession(null);
+      setPayErr('');
+      setPayLoading(false);
       return;
     }
     loadPaySession();
@@ -399,7 +414,7 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
                   onClick={holdSlot}
                   className="mt-4 w-full rounded-lg bg-player-green py-2.5 text-sm font-bold uppercase tracking-wider text-black disabled:opacity-50"
                 >
-                  {busy ? 'Reserving…' : 'Reserve slot (5 min hold)'}
+                  {busy ? 'Reserving…' : 'Reserve slot'}
                 </button>
               ) : null}
 
@@ -441,6 +456,10 @@ export default function PlayerGroundBook({ defaultSport = '' }) {
                         onError={(msg) => setErr(msg)}
                         submitLabel="Verify & confirm booking"
                       />
+                    ) : payLoading ? (
+                      <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
+                    ) : payErr ? (
+                      <p className="text-sm text-red-400">{payErr}</p>
                     ) : (
                       <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
                     )

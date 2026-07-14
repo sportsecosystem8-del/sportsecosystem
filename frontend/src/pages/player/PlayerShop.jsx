@@ -39,6 +39,8 @@ export default function PlayerShop() {
   const [note, setNote] = useState('');
   const [placing, setPlacing] = useState(false);
   const [paySession, setPaySession] = useState(null);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payErr, setPayErr] = useState('');
 
   const params = useMemo(() => {
     const p = {};
@@ -100,15 +102,26 @@ export default function PlayerShop() {
     const items = cartItems();
     if (!showCheckout || !items.length || !shippingValid) {
       setPaySession(null);
+      setPayErr('');
+      setPayLoading(false);
       return;
     }
+    setPayLoading(true);
+    setPayErr('');
     api
       .post('/players/orders/easypaisa/initiate', { items })
-      .then((r) => setPaySession(r.data?.data || null))
+      .then((r) => {
+        const session = r.data?.data || null;
+        setPaySession(session);
+        if (!session) setPayErr('Could not load payment account details.');
+      })
       .catch((e) => {
         setPaySession(null);
-        setErr(getErrorMessage(e));
-      });
+        const msg = getErrorMessage(e);
+        setPayErr(msg);
+        setErr(msg);
+      })
+      .finally(() => setPayLoading(false));
   }, [showCheckout, cart, ship, shippingValid]);
 
   const placePaidOrder = async (paymentPayload) => {
@@ -292,6 +305,10 @@ export default function PlayerShop() {
                   amountFormatter={(amount) => formatProductPrice(amount)}
                   submitLabel="Verify & place order"
                 />
+              ) : payLoading ? (
+                <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
+              ) : payErr ? (
+                <p className="text-sm text-red-400">{payErr}</p>
               ) : (
                 <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
               )

@@ -218,6 +218,13 @@ function derivePlayerPerformanceSignal(evals, fallbackLevel) {
   return { normalized, level, trend, source: 'weekly_evaluations' };
 }
 
+/** True when cricket coach focus matches player role (allrounder coaches match any). */
+function coachMatchesPlayerCategory(profile, playerCategory) {
+  const categories = Array.isArray(profile?.coachingCategories) ? profile.coachingCategories : [];
+  if (!playerCategory || !categories.length) return false;
+  return categories.includes('allrounder') || categories.includes(playerCategory);
+}
+
 function scoreCategoryFit(profile, sportPreference, playerCategory) {
   if (sportPreference !== 'cricket' || !playerCategory) {
     return { score: 1, detail: 'Category matching applies to cricket players.' };
@@ -226,7 +233,7 @@ function scoreCategoryFit(profile, sportPreference, playerCategory) {
   if (!categories.length) {
     return { score: 0.4, detail: 'Coach has not set a coaching focus (batting/bowling/all-rounder).' };
   }
-  const match = categories.includes('allrounder') || categories.includes(playerCategory);
+  const match = coachMatchesPlayerCategory(profile, playerCategory);
   const labels = { batsman: 'batting', bowler: 'bowling', allrounder: 'all-round' };
   return {
     score: match ? 1 : 0.15,
@@ -386,6 +393,11 @@ const getRecommendations = asyncHandler(async (req, res) => {
 
   const scored = coaches
     .filter((c) => c.coachProfile && (c.coachProfile.specialties || []).includes(p.sportPreference))
+    .filter((c) => {
+      // Cricket: hard-filter by coaching focus so batsmen only see batting (etc.). Badminton: sport-only.
+      if (p.sportPreference !== 'cricket' || !p.playerCategory) return true;
+      return coachMatchesPlayerCategory(c.coachProfile, p.playerCategory);
+    })
     .map((c) => {
       const skill = scoreSkill(c.coachProfile, p.sportPreference, playerSignal.level);
       const category = scoreCategoryFit(c.coachProfile, p.sportPreference, p.playerCategory);

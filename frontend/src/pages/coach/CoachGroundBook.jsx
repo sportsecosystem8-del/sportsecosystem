@@ -22,6 +22,8 @@ export default function CoachGroundBook({ defaultSport = '' }) {
   const [hold, setHold] = useState(null);
   const [guest, setGuest] = useState({ fullName: '', phone: '', address: '', city: '' });
   const [paySession, setPaySession] = useState(null);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payErr, setPayErr] = useState('');
   const [confirmed, setConfirmed] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -83,15 +85,26 @@ export default function CoachGroundBook({ defaultSport = '' }) {
   useEffect(() => {
     if (!hold?._id || !guest.phone.trim()) {
       setPaySession(null);
+      setPayErr('');
+      setPayLoading(false);
       return;
     }
+    setPayLoading(true);
+    setPayErr('');
     api
       .post(`/coaches/ground-bookings/${hold._id}/easypaisa/initiate`)
-      .then((r) => setPaySession(r.data?.data || null))
+      .then((r) => {
+        const session = r.data?.data || null;
+        setPaySession(session);
+        if (!session) setPayErr('Could not load payment account details.');
+      })
       .catch((e) => {
         setPaySession(null);
-        setErr(getErrorMessage(e));
-      });
+        const msg = getErrorMessage(e);
+        setPayErr(msg);
+        setErr(msg);
+      })
+      .finally(() => setPayLoading(false));
   }, [hold?._id, guest.phone]);
 
   const finalizeBooking = async (paymentPayload = {}) => {
@@ -242,6 +255,10 @@ export default function CoachGroundBook({ defaultSport = '' }) {
               <input className={coachField} placeholder="Name" value={guest.fullName} onChange={(e) => setGuest((g) => ({ ...g, fullName: e.target.value }))} />
               {guest.phone.trim() && paySession ? (
                 <EasypaisaPaySection session={paySession} busy={busy} onConfirm={finalizeBooking} onError={setErr} submitLabel="Verify & confirm" />
+              ) : guest.phone.trim() && payLoading ? (
+                <p className="text-xs text-slate-500">Preparing Easypaisa checkout…</p>
+              ) : guest.phone.trim() && payErr ? (
+                <p className="text-sm text-red-400">{payErr}</p>
               ) : (
                 <p className="text-xs text-slate-500">Enter phone to load Easypaisa checkout.</p>
               )}
