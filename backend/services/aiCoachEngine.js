@@ -8,6 +8,7 @@ function envNumber(name, fallback) {
 function providerConfig() {
   const provider = String(process.env.AI_PROVIDER || 'openai').toLowerCase();
   const timeoutMs = envNumber('AI_TIMEOUT_MS', 8000);
+  const maxRetries = envNumber('AI_MAX_RETRIES', 3);
   const recDefault = provider === 'groq' ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
   const planDefault = provider === 'groq' ? 'llama-3.1-8b-instant' : 'gpt-4o-mini';
   const recModel = process.env.AI_MODEL_RECOMMENDATIONS || recDefault;
@@ -18,7 +19,7 @@ function providerConfig() {
   if (provider === 'openai' && /^llama-/i.test(recModel + planModel)) {
     console.warn('[ai] model may be incompatible with openai provider. Use an OpenAI model id.');
   }
-  return { provider, timeoutMs, recModel, planModel };
+  return { provider, timeoutMs, maxRetries, recModel, planModel };
 }
 
 function providerAuthAndUrl(provider) {
@@ -38,6 +39,35 @@ function providerAuthAndUrl(provider) {
   };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status) {
+  return status === 429 || status === 503;
+}
+
+function isNonRetryableClientError(status) {
+  return status === 400 || status === 401 || status === 403;
+}
+
+/** Parse Retry-After header (seconds or HTTP-date). Returns delay ms, or null. */
+function retryAfterMs(res) {
+  const raw = res.headers?.get?.('retry-after');
+  if (!raw) return null;
+  const seconds = Number.parseFloat(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 30_000);
+  const dateMs = Date.parse(raw);
+  if (Number.isFinite(dateMs)) return Math.min(Math.max(0, dateMs - Date.now()), 30_000);
+  return null;
+}
+
+function backoffDelayMs(attemptIndex, res) {
+  const fromHeader = res ? retryAfterMs(res) : null;
+  if (fromHeader != null) return fromHeader;
+  return Math.min(1000 * 2 ** attemptIndex, 8000);
+}
+
 async function withTimeout(task, timeoutMs) {
   const c = new AbortController();
   const timer = setTimeout(() => c.abort(), timeoutMs);
@@ -48,10 +78,14 @@ async function withTimeout(task, timeoutMs) {
   }
 }
 
-async function callChatJson({ model, system, user }) {
+async function callChatJson({ model, system, user, timeoutMs: timeoutOverride, maxRetries: retriesOverride }) {
   const cfg = providerConfig();
   const endpoint = providerAuthAndUrl(cfg.provider);
   const startedAt = Date.now();
+  // Allow time for retries + backoff within overall budget
+  const maxRetries = Math.max(0, retriesOverride != null ? retriesOverride : cfg.maxRetries);
+  const baseTimeout = timeoutOverride != null ? timeoutOverride : cfg.timeoutMs;
+  const totalTimeoutMs = baseTimeout + maxRetries * Math.min(baseTimeout, 8000);
   const data = await withTimeout(
     async (signal) => {
       const baseBody = {
@@ -62,31 +96,79 @@ async function callChatJson({ model, system, user }) {
           { role: 'user', content: user },
         ],
       };
-      const attempts = [
+      const bodies = [
         { ...baseBody, response_format: { type: 'json_object' } },
         baseBody,
       ];
       let lastError = null;
-      for (const body of attempts) {
-        const res = await fetch(endpoint.url, {
-          method: 'POST',
-          signal,
-          headers: {
-            Authorization: `Bearer ${endpoint.auth}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) {
-          return res.json();
+
+      for (let bodyIndex = 0; bodyIndex < bodies.length; bodyIndex += 1) {
+        const body = bodies[bodyIndex];
+        let skipToNextBody = false;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+          if (signal.aborted) {
+            throw lastError || new Error('AI provider request aborted');
+          }
+
+          const res = await fetch(endpoint.url, {
+            method: 'POST',
+            signal,
+            headers: {
+              Authorization: `Bearer ${endpoint.auth}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+
+          if (res.ok) {
+            return res.json();
+          }
+
+          const text = await res.text();
+          lastError = new Error(`AI provider failed (${res.status}): ${text.slice(0, 200)}`);
+
+          if (text.includes('response_format') && bodyIndex === 0) {
+            skipToNextBody = true;
+            break;
+          }
+
+          if (isNonRetryableClientError(res.status)) {
+            throw lastError;
+          }
+
+          if (isRetryableStatus(res.status) && attempt < maxRetries) {
+            const delay = backoffDelayMs(attempt, res);
+            console.warn(
+              `[ai] ${endpoint.provider} ${res.status}; retry ${attempt + 1}/${maxRetries} in ${delay}ms`
+            );
+            await sleep(delay);
+            continue;
+          }
+
+          // Non-retryable 4xx (except response_format path), or retries exhausted
+          if (res.status < 500 && !isRetryableStatus(res.status)) {
+            throw lastError;
+          }
+
+          if (attempt >= maxRetries) {
+            throw lastError;
+          }
+
+          const delay = backoffDelayMs(attempt, res);
+          console.warn(
+            `[ai] ${endpoint.provider} ${res.status}; retry ${attempt + 1}/${maxRetries} in ${delay}ms`
+          );
+          await sleep(delay);
         }
-        const text = await res.text();
-        lastError = new Error(`AI provider failed (${res.status}): ${text.slice(0, 200)}`);
-        if (res.status < 500 && !text.includes('response_format')) break;
+
+        if (skipToNextBody) continue;
+        break;
       }
+
       throw lastError || new Error('AI provider failed');
     },
-    cfg.timeoutMs
+    totalTimeoutMs
   );
 
   const content = data?.choices?.[0]?.message?.content;
@@ -103,6 +185,24 @@ async function callChatJson({ model, system, user }) {
   };
 }
 
+function trimRecommendationCandidates(candidates) {
+  return (candidates || []).map((c) => ({
+    userId: String(c.userId),
+    fullName: c.fullName || '',
+    city: c.city || '',
+    specialties: c.specialties || [],
+    coachingCategories: c.coachingCategories || [],
+    preferredPlayerLevels: c.preferredPlayerLevels || [],
+    yearsExperience: c.yearsExperience || 0,
+    averageRating: c.averageRating || 0,
+    ratingCount: c.ratingCount || 0,
+    baselineScore: c.baselineScore,
+    breakdown: c.breakdown,
+    matchReasons: c.matchReasons,
+    matchingDays: c.matchingDays ?? 0,
+  }));
+}
+
 async function generateCoachRecommendations(input) {
   const cfg = providerConfig();
   const system =
@@ -110,24 +210,27 @@ async function generateCoachRecommendations(input) {
     'Re-rank coaches for this player by overall fit. Prioritize: (1) number of matching weekly training days, ' +
     '(2) sport/skill fit, (3) location/city, (4) experience and ratings. ' +
     'Use baselineScore, breakdown, matchReasons, and matchingDays — do not invent scores.';
-  const user = JSON.stringify(
-    {
-      task: 'Rank top coaches by overall fit',
-      output: {
-        rankedCoaches: [{ userId: 'coach_user_id' }],
-      },
-      constraints: {
-        maxResults: input.limit,
-        allowedCoachIds: input.candidates.map((c) => String(c.userId)),
-      },
-      player: input.player,
-      candidates: input.candidates,
+  const candidates = trimRecommendationCandidates(input.candidates);
+  const user = JSON.stringify({
+    task: 'Rank top coaches by overall fit',
+    output: {
+      rankedCoaches: [{ userId: 'coach_user_id' }],
     },
-    null,
-    2
-  );
-  const raw = await callChatJson({ model: cfg.recModel, system, user });
-  const validated = validateRecommendationResult(raw.payload, input.candidates.map((c) => c.userId), input.limit);
+    constraints: {
+      maxResults: input.limit,
+      allowedCoachIds: candidates.map((c) => c.userId),
+    },
+    player: input.player,
+    candidates,
+  });
+  const raw = await callChatJson({
+    model: cfg.recModel,
+    system,
+    user,
+    timeoutMs: envNumber('AI_REC_TIMEOUT_MS', 4000),
+    maxRetries: envNumber('AI_REC_MAX_RETRIES', 1),
+  });
+  const validated = validateRecommendationResult(raw.payload, candidates.map((c) => c.userId), input.limit);
   if (!validated) throw new Error('Invalid AI recommendation payload');
   return { ...validated, provider: raw.provider, model: cfg.recModel, latencyMs: raw.latencyMs };
 }

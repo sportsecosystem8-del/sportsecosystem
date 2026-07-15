@@ -29,6 +29,12 @@ export default function PlayerAttendanceSection({ sessions }) {
   const absent = withRecord.filter((s) => s.attendance?.present === false).length;
   const rate = withRecord.length ? Math.round((present / withRecord.length) * 100) : null;
 
+  const sessionNumberById = new Map(
+    [...completed]
+      .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
+      .map((s, i) => [s._id, i + 1])
+  );
+
   const rows = [...completed]
     .sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt))
     .slice(0, 20);
@@ -58,14 +64,16 @@ export default function PlayerAttendanceSection({ sessions }) {
           <li className="text-sm text-player-on-variant">No completed sessions yet — records appear after your coach marks attendance.</li>
         ) : (
           rows.map((s) => {
-            const coachName = s.coach?.coachProfile?.fullName || s.coach?.email || 'Coach';
+            const sessionNumber = sessionNumberById.get(s._id);
             return (
               <li
                 key={s._id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-player-inner/30 px-4 py-3"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white">{coachName}</p>
+                  <p className="text-sm font-semibold text-white">
+                    Session {sessionNumber != null ? sessionNumber : '—'}
+                  </p>
                   <p className="text-xs text-player-on-variant">
                     {new Date(s.scheduledAt).toLocaleString(undefined, {
                       weekday: 'short',

@@ -388,9 +388,14 @@ export default function PlayerDashboard() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-headline text-xl font-bold uppercase tracking-wider text-white">Your coach</h2>
-          <Link to="/player/training" className="text-xs font-bold uppercase text-player-green hover:underline">
-            Training schedule
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to="/player/my-coach" className="text-xs font-bold uppercase text-player-green hover:underline">
+              My coach
+            </Link>
+            <Link to="/player/training" className="text-xs font-bold uppercase text-player-on-variant hover:text-player-green hover:underline">
+              Training schedule
+            </Link>
+          </div>
         </div>
         <p className="text-sm text-player-on-variant">Coaches who accepted your request and will train you.</p>
         {myCoaches.length ? (
@@ -422,12 +427,20 @@ export default function PlayerDashboard() {
                         Accepted {new Date(acceptedAt).toLocaleDateString()}
                       </p>
                     ) : null}
-                    <Link
-                      to="/player/training"
-                      className="mt-3 inline-block font-headline text-[10px] font-bold uppercase tracking-widest text-player-green hover:underline"
-                    >
-                      View sessions & plans →
-                    </Link>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Link
+                        to="/player/my-coach"
+                        className="inline-block font-headline text-[10px] font-bold uppercase tracking-widest text-player-green hover:underline"
+                      >
+                        View coach & feedback →
+                      </Link>
+                      <Link
+                        to="/player/training"
+                        className="inline-block font-headline text-[10px] font-bold uppercase tracking-widest text-player-on-variant hover:text-player-green hover:underline"
+                      >
+                        Sessions & plans →
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );

@@ -10,6 +10,7 @@ const NAV = [
   { to: '/player/profile', label: 'Account', icon: 'manage_accounts' },
   { to: '/player/performance', label: 'Performance', icon: 'monitoring' },
   { to: '/player/training', label: 'Schedule', icon: 'calendar_today' },
+  { to: '/player/my-coach', label: 'My coach', icon: 'person' },
   { to: '/player/coaches', label: 'Recommend coaches', icon: 'groups' },
   { to: '/player/orders', label: 'Orders', icon: 'leaderboard' },
   { to: '/player/grounds', label: 'Grounds', icon: 'stadium' },

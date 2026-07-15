@@ -44,7 +44,7 @@ export default function Register() {
       return {
         fullName,
         phone,
-        specialties: specialties.split(',').map((s) => s.trim()).filter(Boolean),
+        specialties: [specialties],
         academyLocation,
         city,
         yearsExperience: yearsExperience !== '' ? Number.parseInt(yearsExperience, 10) : undefined,
@@ -220,14 +220,16 @@ export default function Register() {
                   <input className={inputClass} value={fullName} onChange={(e) => setFullName(e.target.value)} required />
                 </div>
                 <div>
-                  <label className={labelClass}>Specialties (comma)</label>
-                  <input
-                    className={inputClass}
-                    placeholder="cricket, badminton"
+                  <label className={labelClass}>Sport specialty</label>
+                  <select
+                    className={selectClass}
                     value={specialties}
                     onChange={(e) => setSpecialties(e.target.value)}
                     required
-                  />
+                  >
+                    <option value="cricket">Cricket</option>
+                    <option value="badminton">Badminton</option>
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Academy location</label>

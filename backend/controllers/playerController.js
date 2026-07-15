@@ -165,6 +165,27 @@ function assertAiRecommendationsConfigured() {
   }
 }
 
+/** Verified coach with a usable CoachProfile — safe for discovery / public profile. */
+function isDiscoverableCoach(user) {
+  if (!user || user.role !== 'coach') return false;
+  if (user.verificationStatus !== 'verified' || user.isSuspended) return false;
+  const profile = user.coachProfile;
+  if (!profile || typeof profile !== 'object') return false;
+  if (!String(profile.fullName || '').trim()) return false;
+  if (!Array.isArray(profile.specialties) || profile.specialties.length === 0) return false;
+  return true;
+}
+
+function scoredToRecommendationRows(scored, limit) {
+  return scored.slice(0, limit).map((s) => ({
+    userId: s.coachUser._id,
+    profile: s.profile,
+    matchScore: s.matchScore,
+    breakdown: s.breakdown,
+    reasons: s.reasons,
+  }));
+}
+
 function scoreLocation(playerCity, coachProfile) {
   const coachCity = coachProfile?.city;
   const academy = String(coachProfile?.academyLocation || '').trim();
@@ -392,7 +413,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
   const playerSignal = derivePlayerPerformanceSignal(recentEvals, p.skillLevel);
 
   const scored = coaches
-    .filter((c) => c.coachProfile && (c.coachProfile.specialties || []).includes(p.sportPreference))
+    .filter((c) => isDiscoverableCoach(c) && (c.coachProfile.specialties || []).includes(p.sportPreference))
     .filter((c) => {
       // Cricket: hard-filter by coaching focus so batsmen only see batting (etc.). Badminton: sport-only.
       if (p.sportPreference !== 'cricket' || !p.playerCategory) return true;
@@ -443,87 +464,102 @@ const getRecommendations = asyncHandler(async (req, res) => {
   let generationMethod = 'ai';
   let generationMeta = null;
 
-  if (!aiRecommendationsEnabled()) {
-    return res.status(503).json({
-      success: false,
-      message: 'AI coach recommendations are disabled. Set AI_RECOMMENDATIONS_ENABLED=true on the server.',
-    });
-  }
-
-  try {
-    assertAiRecommendationsConfigured();
-  } catch (e) {
-    return res.status(e.statusCode || 503).json({ success: false, message: e.message });
-  }
-
   if (!scored.length) {
+    const sport = String(p.sportPreference || 'sport').toLowerCase();
     return res.json({
       success: true,
-      generationMethod: 'ai',
+      generationMethod: 'baseline',
       data: [],
-      message: 'No verified coaches match your sport yet.',
+      message: `No verified ${sport} coaches yet.`,
     });
+  }
+
+  let useAi = aiRecommendationsEnabled();
+  if (!useAi) {
+    console.warn('[ai][recommendations] AI disabled; using baseline scores');
+  } else {
+    try {
+      assertAiRecommendationsConfigured();
+    } catch (e) {
+      console.warn('[ai][recommendations] not configured; using baseline:', e.message);
+      useAi = false;
+    }
   }
 
   let finalRows = [];
-  try {
-    const aiInput = {
-      limit,
-      player: {
-        sportPreference: p.sportPreference,
-        skillLevel: p.skillLevel,
-        playerCategory: p.playerCategory || '',
-        city: p.city || '',
-        trainingPreferences: p.trainingPreferences || [],
-        performanceLevel: playerSignal.level,
-        performanceTrend: playerSignal.trend,
-      },
-      candidates: scored.map((s) => ({
-        userId: String(s.coachUser._id),
-        fullName: s.profile?.fullName || '',
-        city: s.profile?.city || '',
-        specialties: s.profile?.specialties || [],
-        coachingCategories: s.profile?.coachingCategories || [],
-        preferredPlayerLevels: s.profile?.preferredPlayerLevels || [],
-        yearsExperience: s.profile?.yearsExperience || 0,
-        averageRating: s.profile?.averageRating || 0,
-        ratingCount: s.profile?.ratingCount || 0,
-        availability: s.profile?.availability || [],
-        baselineScore: s.matchScore,
-        breakdown: s.breakdown,
-        matchReasons: s.reasons,
-        matchingDays: s.matchingDays,
-      })),
-    };
-    const ai = await generateCoachRecommendations(aiInput);
-    const byId = new Map(scored.map((s) => [String(s.coachUser._id), s]));
-    finalRows = ai.rankedCoaches
-      .map((row) => {
-        const base = byId.get(String(row.userId));
-        if (!base) return null;
-        return {
-          userId: base.coachUser._id,
-          profile: base.profile,
-          matchScore: base.matchScore,
-          breakdown: base.breakdown,
-          reasons: base.reasons,
-        };
-      })
-      .filter(Boolean)
-      .slice(0, limit);
+  if (useAi) {
+    try {
+      const aiInput = {
+        limit,
+        player: {
+          sportPreference: p.sportPreference,
+          skillLevel: p.skillLevel,
+          playerCategory: p.playerCategory || '',
+          city: p.city || '',
+          trainingPreferences: p.trainingPreferences || [],
+          performanceLevel: playerSignal.level,
+          performanceTrend: playerSignal.trend,
+        },
+        candidates: scored.map((s) => ({
+          userId: String(s.coachUser._id),
+          fullName: s.profile?.fullName || '',
+          city: s.profile?.city || '',
+          specialties: s.profile?.specialties || [],
+          coachingCategories: s.profile?.coachingCategories || [],
+          preferredPlayerLevels: s.profile?.preferredPlayerLevels || [],
+          yearsExperience: s.profile?.yearsExperience || 0,
+          averageRating: s.profile?.averageRating || 0,
+          ratingCount: s.profile?.ratingCount || 0,
+          baselineScore: s.matchScore,
+          breakdown: s.breakdown,
+          matchReasons: s.reasons,
+          matchingDays: s.matchingDays,
+        })),
+      };
+      const ai = await generateCoachRecommendations(aiInput);
+      const byId = new Map(scored.map((s) => [String(s.coachUser._id), s]));
+      finalRows = ai.rankedCoaches
+        .map((row) => {
+          const base = byId.get(String(row.userId));
+          if (!base) return null;
+          return {
+            userId: base.coachUser._id,
+            profile: base.profile,
+            matchScore: base.matchScore,
+            breakdown: base.breakdown,
+            reasons: base.reasons,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, limit);
 
-    if (!finalRows.length) {
-      return res.status(502).json({
-        success: false,
-        message: 'AI could not produce coach recommendations. Try again shortly.',
-      });
+      if (!finalRows.length) {
+        console.warn('[ai][recommendations] empty AI ranking; using baseline scores');
+        generationMethod = 'baseline';
+        finalRows = scoredToRecommendationRows(scored, limit);
+      } else {
+        generationMeta = { provider: ai.provider, model: ai.model, latencyMs: ai.latencyMs };
+      }
+    } catch (e) {
+      console.warn(
+        '[ai][recommendations] falling back to baseline:',
+        e.message?.slice?.(0, 120) || e.message
+      );
+      generationMethod = 'baseline';
+      finalRows = scoredToRecommendationRows(scored, limit);
     }
-    generationMeta = { provider: ai.provider, model: ai.model, latencyMs: ai.latencyMs };
-  } catch (e) {
-    console.error('[ai][recommendations] failed:', e.message);
-    return res.status(502).json({
-      success: false,
-      message: `AI recommendations failed: ${e.message}`,
+  } else {
+    generationMethod = 'baseline';
+    finalRows = scoredToRecommendationRows(scored, limit);
+  }
+
+  if (!finalRows.length) {
+    const sport = String(p.sportPreference || 'sport').toLowerCase();
+    return res.json({
+      success: true,
+      generationMethod,
+      data: [],
+      message: `No verified ${sport} coaches yet.`,
     });
   }
 
@@ -564,12 +600,16 @@ const getRecommendations = asyncHandler(async (req, res) => {
 });
 
 async function findVerifiedCoachForPlayer(coachId) {
-  return User.findOne({
+  const coach = await User.findOne({
     _id: coachId,
     role: 'coach',
     verificationStatus: 'verified',
     isSuspended: false,
-  }).lean();
+  })
+    .populate('coachProfile')
+    .lean();
+  if (!isDiscoverableCoach(coach)) return null;
+  return coach;
 }
 
 const listCoachCertificates = asyncHandler(async (req, res) => {

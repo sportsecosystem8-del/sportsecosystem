@@ -50,6 +50,16 @@ export default function AdminUsers() {
     }
   };
 
+  const removeUser = async (id, email) => {
+    if (!confirm(`Delete user ${email}? This removes their account and profile permanently.`)) return;
+    try {
+      await api.delete(`/admin/users/${id}`);
+      load();
+    } catch (e) {
+      alert(getErrorMessage(e));
+    }
+  };
+
   return (
     <div>
       <AdminPageHeader
@@ -150,13 +160,22 @@ export default function AdminUsers() {
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     {u.role !== 'admin' ? (
-                      <button
-                        type="button"
-                        className="font-label text-xs font-semibold text-admin-cyan hover:underline"
-                        onClick={() => suspend(u._id, !u.isSuspended)}
-                      >
-                        {u.isSuspended ? 'Unsuspend' : 'Suspend'}
-                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          className="font-label text-xs font-semibold text-admin-cyan hover:underline"
+                          onClick={() => suspend(u._id, !u.isSuspended)}
+                        >
+                          {u.isSuspended ? 'Unsuspend' : 'Suspend'}
+                        </button>
+                        <button
+                          type="button"
+                          className="font-label text-xs font-semibold text-admin-orange hover:underline"
+                          onClick={() => removeUser(u._id, u.email)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     ) : (
                       <span className="font-label text-xs text-slate-600">—</span>
                     )}

@@ -65,6 +65,40 @@ cd backend
 npm test
 ```
 
+## Production build
+
+From the **repo root**:
+
+```powershell
+npm install
+npm install --prefix backend
+npm install --prefix frontend
+npm run build
+```
+
+Output: `frontend/dist/`.
+
+Set `backend/.env` for production (`NODE_ENV=production`, strong `JWT_SECRET`, Atlas `MONGODB_URI`, `CLIENT_URL` matching your public site URL, `TRUST_PROXY=true` behind nginx/Railway/Render).
+
+Start API (also serves the SPA from `frontend/dist` when `NODE_ENV=production`):
+
+```powershell
+# Windows PowerShell
+$env:NODE_ENV="production"; npm run backend:start
+
+# Or one-shot from root (builds then starts)
+npm run start:prod
+```
+
+PM2 cluster:
+
+```powershell
+npm run build
+npx pm2 start ecosystem.config.js
+```
+
+Health check: `GET /api/health`
+
 ## Documentation
 
 - [Phase 1 — document analysis](docs/PHASE1_DOCUMENT_ANALYSIS.md)
@@ -76,4 +110,4 @@ npm test
 
 **Backend** (see `backend/.env.example`): `PORT`, `MONGODB_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_URL`, `HOLD_MINUTES`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 
-**Frontend** (optional): `VITE_API_URL` if not using the Vite dev proxy.
+**Frontend** (optional): `VITE_API_URL` if not using the Vite dev proxy. In production with same-origin Express serving, leave unset (`/api` default).

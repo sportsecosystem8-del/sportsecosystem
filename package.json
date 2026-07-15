@@ -14,11 +14,13 @@
     "frontend:build": "npm run build --prefix frontend",
     "frontend:lint": "npm run lint --prefix frontend",
     "build": "npm run frontend:build",
+    "start:prod": "npm run build && cross-env NODE_ENV=production npm start --prefix backend",
     "lint": "npm run frontend:lint",
     "test": "npm test --prefix backend"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3"
   },
   "dependencies": {
     "mongodb": "^7.2.0"

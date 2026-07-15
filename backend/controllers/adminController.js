@@ -241,6 +241,22 @@ const patchUser = asyncHandler(async (req, res) => {
 const deleteUser = asyncHandler(async (req, res) => {
   const u = await User.findById(req.params.id);
   if (!u || u.role === 'admin') return res.status(403).json({ success: false, message: 'Cannot delete' });
+
+  if (u.role === 'coach') {
+    await CoachProfile.deleteMany({
+      $or: [{ user: u._id }, ...(u.coachProfile ? [{ _id: u.coachProfile }] : [])],
+    });
+  } else if (u.role === 'player') {
+    await PlayerProfile.deleteMany({
+      $or: [{ user: u._id }, ...(u.playerProfile ? [{ _id: u.playerProfile }] : [])],
+    });
+  } else if (u.role === 'business_owner') {
+    await BusinessProfile.deleteMany({
+      $or: [{ user: u._id }, ...(u.businessProfile ? [{ _id: u.businessProfile }] : [])],
+    });
+  }
+
+  await VerificationDocument.deleteMany({ user: u._id });
   await u.deleteOne();
   res.json({ success: true, message: 'Deleted' });
 });

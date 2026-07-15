@@ -20,6 +20,7 @@ export default function PlayerCoaches() {
   const [requestingCoachId, setRequestingCoachId] = useState(null);
   const [requestNote, setRequestNote] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
   const [err, setErr] = useState('');
   const [certPicker, setCertPicker] = useState(null);
   const [certLoadingId, setCertLoadingId] = useState(null);
@@ -112,17 +113,23 @@ export default function PlayerCoaches() {
   };
 
   const load = async () => {
+    setErr('');
+    setInfoMsg('');
     try {
       const [rec, tr, profileRes] = await Promise.all([
         api.get('/players/recommendations', { params: { limit: 5 } }),
         api.get('/players/training-requests'),
         api.get('/players/me/profile').catch(() => ({ data: { data: null } })),
       ]);
-      setList(rec.data.data || []);
+      const rows = rec.data.data || [];
+      setList(rows);
       setGenerationMethod(rec.data.generationMethod || 'ai');
       setTrainingRequests(tr.data.data || []);
       setPlayerOrigin(playerLocationOrigin(profileRes.data?.data));
       setPlayerSport(profileRes.data?.data?.sportPreference || '');
+      if (!rows.length && rec.data.message) {
+        setInfoMsg(rec.data.message);
+      }
     } catch (e) {
       setErr(getErrorMessage(e));
     }
@@ -165,9 +172,15 @@ export default function PlayerCoaches() {
         </p>
       ) : null}
       <p className="mb-3 text-xs uppercase tracking-[0.16em] text-player-on-variant/70">
-        Source: {generationMethod === 'ai' ? 'AI matched to your profile' : 'Recommendations'}
+        Source:{' '}
+        {generationMethod === 'ai'
+          ? 'AI matched to your profile'
+          : generationMethod === 'baseline'
+            ? 'Matched by profile scores'
+            : 'Recommendations'}
       </p>
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
+      {infoMsg ? <p className="mb-4 text-sm text-player-on-variant">{infoMsg}</p> : null}
       {statusMsg ? <p className="mb-4 text-sm text-player-green">{statusMsg}</p> : null}
       <PlayerCard className="mb-6 max-w-xl">
         <label className={playerLabel} htmlFor="max-budget">
@@ -282,7 +295,7 @@ export default function PlayerCoaches() {
             </div>
           </PlayerCard>
         ))}
-        {!list.length && !err ? (
+        {!list.length && !err && !infoMsg ? (
           <p className="text-sm text-player-on-variant">No coaches yet — complete your profile or wait for verifications.</p>
         ) : null}
       </ul>

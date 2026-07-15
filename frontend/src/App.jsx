@@ -11,6 +11,7 @@ import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerCoaches from './pages/player/PlayerCoaches';
+import PlayerMyCoach from './pages/player/PlayerMyCoach';
 import PlayerTraining from './pages/player/PlayerTraining';
 import PlayerGrounds from './pages/player/PlayerGrounds';
 import PlayerGroundBookings from './pages/player/PlayerGroundBookings';
@@ -75,6 +76,7 @@ export default function App() {
           <Route index element={<PlayerDashboard />} />
           <Route path="profile" element={<PlayerProfile />} />
           <Route path="coaches" element={<PlayerCoaches />} />
+          <Route path="my-coach" element={<PlayerMyCoach />} />
           <Route path="training" element={<PlayerTraining />} />
           <Route path="grounds" element={<PlayerGrounds />} />
           <Route path="ground-bookings" element={<PlayerGroundBookings />} />
