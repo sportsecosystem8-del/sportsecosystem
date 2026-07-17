@@ -234,28 +234,6 @@ export default function PlayerCoaches() {
                 </p>
               ) : null}
               <CoachLocationLines profile={row.profile} playerOrigin={playerOrigin} className="mt-2" />
-              <p className="mt-2 text-xs text-player-on-variant/70">
-                Match score: {row.matchScore?.toFixed?.(1) ?? row.matchScore}
-              </p>
-              {row.breakdown ? (
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-player-on-variant/80">
-                  <span className="rounded border border-white/10 bg-white/5 px-2 py-0.5">Skill {row.breakdown.skill}%</span>
-                  <span className="rounded border border-white/10 bg-white/5 px-2 py-0.5">Time {row.breakdown.time}%</span>
-                  <span className="rounded border border-white/10 bg-white/5 px-2 py-0.5">
-                    Location {row.breakdown.location}%
-                  </span>
-                  <span className="rounded border border-white/10 bg-white/5 px-2 py-0.5">
-                    Performance {row.breakdown.performance}%
-                  </span>
-                </div>
-              ) : null}
-              {Array.isArray(row.reasons) && row.reasons.length ? (
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-player-on-variant/70">
-                  {row.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              ) : null}
               </div>
             </button>
             <div className="flex w-full flex-col gap-2 border-t border-white/10 pt-4 sm:w-56 sm:border-0 sm:pt-0">

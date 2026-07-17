@@ -8,7 +8,7 @@ const SUBSCRIPTION_PLANS = [
   {
     tier: 'basic',
     title: 'Basic',
-    price: 19,
+    price: 5000,
     listings: 20,
     tagline: 'Start selling equipment with room to grow.',
     perks: ['20 active listings per billing cycle', 'Product catalog & stock control', 'Order management & sales CSV'],
@@ -16,7 +16,7 @@ const SUBSCRIPTION_PLANS = [
   {
     tier: 'pro',
     title: 'Pro',
-    price: 49,
+    price: 14000,
     listings: 40,
     popular: true,
     tagline: 'For growing stores that need more shelf space.',
@@ -25,7 +25,7 @@ const SUBSCRIPTION_PLANS = [
   {
     tier: 'premium',
     title: 'Premium',
-    price: 99,
+    price: 28000,
     listings: 60,
     tagline: 'Maximum visibility for high-volume storefronts.',
     perks: ['60 active listings per billing cycle', 'Everything in Pro', 'Priority placement for scale'],
@@ -233,7 +233,7 @@ export default function BusinessDashboard() {
                 <p className="mt-1 text-sm text-slate-400">
                   {onFreeTrial
                     ? `New businesses get ${freeTrialTotal} free listings once. After that, pick a paid plan.`
-                    : 'Choose a plan that matches your catalog size. Prices are per month (USD).'}
+                    : 'Choose a plan that matches your catalog size. Prices are per month (PKR).'}
                 </p>
               </div>
               <p className="text-xs uppercase tracking-widest text-[#cc97ff]/90">
@@ -275,7 +275,7 @@ export default function BusinessDashboard() {
                     <p className="mt-2 min-h-[2.5rem] text-sm leading-relaxed text-slate-400">{plan.tagline}</p>
 
                     <div className="mt-6 flex items-baseline gap-1">
-                      <span className="font-orbitron text-4xl font-bold text-white">${plan.price}</span>
+                      <span className="font-orbitron text-4xl font-bold text-white">PKR {plan.price.toLocaleString()}</span>
                       <span className="text-sm text-slate-500">/month</span>
                     </div>
                     <p className="mt-2 text-xs font-medium uppercase tracking-wider text-[#cc97ff]/90">

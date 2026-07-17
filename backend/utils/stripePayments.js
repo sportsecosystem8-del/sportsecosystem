@@ -23,12 +23,14 @@ function isStripeEnabled() {
   return getStripeSecretKey() != null;
 }
 
-/** USD → smallest unit (cents). */
+/** Major currency unit (USD/PKR) → smallest unit (cents/paisa). */
 function dollarsToCents(amount) {
   const n = Number(amount);
   if (Number.isNaN(n) || n < 0) return 0;
   return Math.round(n * 100);
 }
+
+const majorToMinor = dollarsToCents;
 
 async function retrieveSucceededPaymentIntent(paymentIntentId) {
   const s = getStripe();
@@ -67,6 +69,7 @@ module.exports = {
   getStripe,
   isStripeEnabled,
   dollarsToCents,
+  majorToMinor,
   retrieveSucceededPaymentIntent,
   assertAmountMatches,
   paymentIntentMethodSpec,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import CoachAvatar from '../../components/CoachAvatar';
 import { coachField, coachLabel } from '../../components/coach/coachClassNames';
 import WeeklyDaysTimeEditor from '../../components/shared/WeeklyDaysTimeEditor';
+import DeleteAccountSection from '../../components/shared/DeleteAccountSection';
 import {
   MultiCheckboxGroup,
   SPORT_OPTIONS,
@@ -403,6 +404,13 @@ export default function CoachProfile() {
           SAVE
         </button>
       </form>
+
+      <DeleteAccountSection
+        className="mt-10"
+        titleClass="font-display text-xl tracking-[0.08em] text-red-300"
+        inputClass={coachField}
+        buttonClass="bg-red-600 px-6 py-3 font-display text-lg tracking-[0.1em] text-white hover:bg-red-500 disabled:opacity-50"
+      />
     </div>
   );
 }

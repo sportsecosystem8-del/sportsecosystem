@@ -207,18 +207,21 @@ async function generateCoachRecommendations(input) {
   const cfg = providerConfig();
   const system =
     'You are a sports coach recommendation engine. Return strict JSON only. ' +
-    'Re-rank coaches for this player by overall fit. Prioritize: (1) number of matching weekly training days, ' +
-    '(2) sport/skill fit, (3) location/city, (4) experience and ratings. ' +
-    'Use baselineScore, breakdown, matchReasons, and matchingDays — do not invent scores.';
+    'Select the best coaches for this player. Prioritize: (1) preferredPlayerLevels matching player skillLevel, ' +
+    '(2) number of matching weekly training days, (3) sport/category fit, (4) location/city, (5) experience and ratings. ' +
+    'Prefer coaches whose preferredPlayerLevels include the player skillLevel. ' +
+    'Use baselineScore, breakdown, matchReasons, and matchingDays — do not invent scores. ' +
+    'Order rankedCoaches by descending baselineScore.';
   const candidates = trimRecommendationCandidates(input.candidates);
   const user = JSON.stringify({
-    task: 'Rank top coaches by overall fit',
+    task: 'Select top coaches by overall fit; keep skill-level match first',
     output: {
       rankedCoaches: [{ userId: 'coach_user_id' }],
     },
     constraints: {
       maxResults: input.limit,
       allowedCoachIds: candidates.map((c) => c.userId),
+      preferPreferredLevelMatch: true,
     },
     player: input.player,
     candidates,

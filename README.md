@@ -76,11 +76,22 @@ npm install --prefix frontend
 npm run build
 ```
 
-Output: `frontend/dist/`.
+Output: `frontend/dist/` (Vite production bundle).
+
+### Production checklist
+
+1. **Secrets:** strong `JWT_SECRET`, never commit `.env` / `render.env`
+2. **MongoDB Atlas:** set `MONGODB_URI` on the API host
+3. **JWT:** `JWT_EXPIRES_IN=7d` (avoid short values like `3m` in production)
+4. **CORS / emails:** `CLIENT_URL` + `APP_BASE_URL` = public frontend URL (Vercel)
+5. **Proxy:** `TRUST_PROXY=true` on Render/Railway/nginx
+6. **Frontend (Vercel):** `VITE_API_URL=https://YOUR-API.onrender.com/api`
+7. **Seed admin once:** `npm run seed:admin` on the API host
+8. **Optional:** SMTP, Stripe, Groq/OpenAI, Easypaisa keys
 
 Set `backend/.env` for production (`NODE_ENV=production`, strong `JWT_SECRET`, Atlas `MONGODB_URI`, `CLIENT_URL` matching your public site URL, `TRUST_PROXY=true` behind nginx/Railway/Render).
 
-Start API (also serves the SPA from `frontend/dist` when `NODE_ENV=production`):
+**Same-origin (API serves SPA):** build frontend first, then:
 
 ```powershell
 # Windows PowerShell
@@ -90,6 +101,8 @@ $env:NODE_ENV="production"; npm run backend:start
 npm run start:prod
 ```
 
+**Split deploy:** API on Render (no SPA required); frontend on Vercel with `VITE_API_URL`.
+
 PM2 cluster:
 
 ```powershell
@@ -98,6 +111,32 @@ npx pm2 start ecosystem.config.js
 ```
 
 Health check: `GET /api/health`
+
+## Split deploy (Vercel + Render + MongoDB Atlas)
+
+Use this when the SPA and API run on different hosts. Local `npm run dev` is unchanged (Vite still proxies `/api` and `/uploads`).
+
+| Piece | Host | Notes |
+|-------|------|--------|
+| Frontend | [Vercel](https://vercel.com) | Root Directory = `frontend`, build `npm run build`, output `dist`. Uses [`frontend/vercel.json`](frontend/vercel.json) for SPA rewrites. |
+| Backend | [Render](https://render.com) | Root Directory = `backend`, start `npm start`. Optional Blueprint: [`render.yaml`](render.yaml). |
+| Database | [MongoDB Atlas](https://www.mongodb.com/atlas) | Free cluster; set `MONGODB_URI` on Render. |
+
+### Deploy order
+
+1. Create an Atlas cluster and copy `MONGODB_URI`.
+2. Deploy the backend on Render (`backend` as root). Set at least: `MONGODB_URI`, `JWT_SECRET`, `NODE_ENV=production`, `TRUST_PROXY=true`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`. Confirm `GET https://<your-api>/api/health`.
+3. On Render, run admin seed once (Shell / one-off): `npm run seed:admin`.
+4. Deploy the frontend on Vercel with env:
+   - `VITE_API_URL=https://<your-api>.onrender.com/api`
+   - optional: `VITE_STRIPE_PUBLISHABLE_KEY`
+5. Set backend CORS/email bases to the Vercel URL, then redeploy Render:
+   - `CLIENT_URL=https://YOUR-APP.vercel.app`
+   - `APP_BASE_URL=https://YOUR-APP.vercel.app`
+
+See [`frontend/.env.example`](frontend/.env.example) and [`backend/.env.example`](backend/.env.example) for the full production checklist (SMTP, AI keys, Stripe/Easypaisa).
+
+**Uploads:** files are stored under `backend/uploads/` on the API disk. On Render’s free tier, redeploys/restarts can wipe that disk — fine for demos; use S3/Cloudinary later for durable media.
 
 ## Documentation
 
@@ -110,4 +149,4 @@ Health check: `GET /api/health`
 
 **Backend** (see `backend/.env.example`): `PORT`, `MONGODB_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_URL`, `HOLD_MINUTES`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 
-**Frontend** (optional): `VITE_API_URL` if not using the Vite dev proxy. In production with same-origin Express serving, leave unset (`/api` default).
+**Frontend** (see `frontend/.env.example`): leave `VITE_API_URL` unset for local Vite proxy or same-origin Express. For split deploy (Vercel), set `VITE_API_URL` to the full API base (e.g. `https://your-api.onrender.com/api`). Optional: `VITE_STRIPE_PUBLISHABLE_KEY`.

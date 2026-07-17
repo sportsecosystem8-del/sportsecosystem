@@ -4,6 +4,7 @@ import PlayerCard from '../../components/player/PlayerCard';
 import PlayerIcon from '../../components/player/PlayerIcon';
 import { playerProfileInput, playerProfileSaveBtn } from '../../components/player/playerClassNames';
 import WeeklyDaysTimeEditor from '../../components/shared/WeeklyDaysTimeEditor';
+import DeleteAccountSection from '../../components/shared/DeleteAccountSection';
 import { PLAYER_CATEGORIES } from '../../utils/evaluationDisplay';
 import { api, getErrorMessage } from '../../services/api';
 
@@ -207,18 +208,15 @@ export default function PlayerProfile() {
             Your coach-assigned roll numbers — use these at the academy (not tied to profile photo).
           </p>
           <ul className="mt-4 space-y-3">
-            {enrollments.map((e) => {
-              const coachName = e.coach?.coachProfile?.fullName || e.coach?.email || 'Coach';
-              return (
-                <li
-                  key={e._id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-player-green/25 bg-player-green/5 px-4 py-3"
-                >
-                  <span className="text-sm text-slate-200">{coachName}</span>
-                  <span className="font-orbitron text-lg font-bold text-player-green">#{e.coachRollNo}</span>
-                </li>
-              );
-            })}
+            {enrollments.map((e) => (
+              <li
+                key={e._id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-player-green/25 bg-player-green/5 px-4 py-3"
+              >
+                <span className="text-sm text-slate-400">Student ID</span>
+                <span className="font-orbitron text-lg font-bold text-player-green">#{e.coachRollNo}</span>
+              </li>
+            ))}
           </ul>
         </PlayerCard>
       ) : null}
@@ -364,6 +362,13 @@ export default function PlayerProfile() {
           </button>
         </div>
       </form>
+
+      <DeleteAccountSection
+        className="mt-10"
+        titleClass="font-headline text-lg font-bold uppercase tracking-tight text-red-300"
+        inputClass={playerProfileInput}
+        buttonClass="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50"
+      />
     </div>
   );
 }

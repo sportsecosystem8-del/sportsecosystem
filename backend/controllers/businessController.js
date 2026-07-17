@@ -28,14 +28,14 @@ const {
   paymentIntentMethodSpec,
 } = require('../utils/stripePayments');
 
-/** Monthly USD price per subscription tier */
-function subscriptionPriceUsd(pkg) {
-  if (pkg === 'premium') return 99;
-  if (pkg === 'pro') return 49;
-  return 19;
+/** Monthly PKR price per subscription tier */
+function subscriptionPricePkr(pkg) {
+  if (pkg === 'premium') return 28000;
+  if (pkg === 'pro') return 14000;
+  return 5000;
 }
 
-async function verifyBusinessSubscriptionPI(paymentIntentId, userId, action, pkg, amountUsd) {
+async function verifyBusinessSubscriptionPI(paymentIntentId, userId, action, pkg, amountPkr) {
   const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
   if (pi.metadata.purpose !== 'business_subscription' || pi.metadata.userId !== String(userId)) {
     const err = new Error('Invalid payment');
@@ -52,7 +52,7 @@ async function verifyBusinessSubscriptionPI(paymentIntentId, userId, action, pkg
     err.statusCode = 400;
     throw err;
   }
-  assertAmountMatches(pi, dollarsToCents(amountUsd));
+  assertAmountMatches(pi, dollarsToCents(amountPkr));
 }
 
 const getProfile = asyncHandler(async (req, res) => {
@@ -86,13 +86,13 @@ const createSubscriptionPaymentIntent = asyncHandler(async (req, res) => {
   }
   const { action, package: pkg } = req.body;
   const userId = req.user.id;
-  let amountUsd;
+  let amountPkr;
   let metaPkg;
   if (action === 'subscribe') {
     if (!pkg || !['basic', 'pro', 'premium'].includes(pkg)) {
       return res.status(400).json({ success: false, message: 'package is required for subscribe' });
     }
-    amountUsd = subscriptionPriceUsd(pkg);
+    amountPkr = subscriptionPricePkr(pkg);
     metaPkg = pkg;
   } else if (action === 'renew') {
     const bp = await BusinessProfile.findOne({ user: userId });
@@ -104,7 +104,7 @@ const createSubscriptionPaymentIntent = asyncHandler(async (req, res) => {
       });
     }
     metaPkg = bp.subscriptionPackage;
-    amountUsd = subscriptionPriceUsd(bp.subscriptionPackage);
+    amountPkr = subscriptionPricePkr(bp.subscriptionPackage);
   } else if (action === 'change') {
     if (!pkg || !['basic', 'pro', 'premium'].includes(pkg)) {
       return res.status(400).json({ success: false, message: 'package is required for change' });
@@ -125,19 +125,19 @@ const createSubscriptionPaymentIntent = asyncHandler(async (req, res) => {
         message: `Cannot switch to ${pkg}: you have ${count} active listings but this plan allows ${limit}.`,
       });
     }
-    amountUsd = subscriptionPriceUsd(pkg);
+    amountPkr = subscriptionPricePkr(pkg);
     metaPkg = pkg;
   } else {
     return res.status(400).json({ success: false, message: 'action must be subscribe, renew, or change' });
   }
-  const amountCents = dollarsToCents(amountUsd);
+  const amountCents = dollarsToCents(amountPkr);
   if (amountCents < 50) {
     return res.status(400).json({ success: false, message: 'Amount below minimum charge' });
   }
   const stripe = getStripe();
   const pi = await stripe.paymentIntents.create({
     amount: amountCents,
-    currency: 'usd',
+    currency: 'pkr',
     ...paymentIntentMethodSpec(),
     metadata: {
       purpose: 'business_subscription',
@@ -151,24 +151,24 @@ const createSubscriptionPaymentIntent = asyncHandler(async (req, res) => {
     success: true,
     data: {
       clientSecret: pi.client_secret,
-      amount: amountUsd,
+      amount: amountPkr,
       action,
       package: metaPkg,
-      currency: 'usd',
+      currency: 'pkr',
     },
   });
 });
 
 const subscribe = asyncHandler(async (req, res) => {
   const { package: pkg, paymentIntentId } = req.body;
-  const amountUsd = subscriptionPriceUsd(pkg);
+  const amountPkr = subscriptionPricePkr(pkg);
   const limit = BusinessProfile.packageLimit(pkg);
   if (isStripeEnabled()) {
     if (!paymentIntentId) {
       return res.status(400).json({ success: false, message: 'paymentIntentId is required. Pay with Stripe first.' });
     }
     try {
-      await verifyBusinessSubscriptionPI(paymentIntentId, req.user.id, 'subscribe', pkg, amountUsd);
+      await verifyBusinessSubscriptionPI(paymentIntentId, req.user.id, 'subscribe', pkg, amountPkr);
     } catch (e) {
       return res.status(e.statusCode || 400).json({ success: false, message: e.message });
     }
@@ -176,7 +176,7 @@ const subscribe = asyncHandler(async (req, res) => {
   const payment = await Payment.create({
     payer: req.user.id,
     type: 'subscription',
-    amount: amountUsd,
+    amount: amountPkr,
     status: 'completed',
     externalRef: isStripeEnabled() ? paymentIntentId : 'mock-gateway',
     meta: {
@@ -216,14 +216,14 @@ const renewSubscription = asyncHandler(async (req, res) => {
     });
   }
   const pkg = bp.subscriptionPackage;
-  const amountUsd = subscriptionPriceUsd(pkg);
+  const amountPkr = subscriptionPricePkr(pkg);
   const limit = BusinessProfile.packageLimit(bp.subscriptionPackage);
   if (isStripeEnabled()) {
     if (!paymentIntentId) {
       return res.status(400).json({ success: false, message: 'paymentIntentId is required. Pay with Stripe first.' });
     }
     try {
-      await verifyBusinessSubscriptionPI(paymentIntentId, req.user.id, 'renew', pkg, amountUsd);
+      await verifyBusinessSubscriptionPI(paymentIntentId, req.user.id, 'renew', pkg, amountPkr);
     } catch (e) {
       return res.status(e.statusCode || 400).json({ success: false, message: e.message });
     }
@@ -231,7 +231,7 @@ const renewSubscription = asyncHandler(async (req, res) => {
   const payment = await Payment.create({
     payer: req.user.id,
     type: 'subscription',
-    amount: amountUsd,
+    amount: amountPkr,
     status: 'completed',
     externalRef: isStripeEnabled() ? paymentIntentId : 'mock-gateway-renewal',
   });
@@ -311,7 +311,7 @@ const changeSubscription = asyncHandler(async (req, res) => {
       message: 'Subscribe to a plan before changing tiers.',
     });
   }
-  const amountUsd = subscriptionPriceUsd(pkg);
+  const amountPkr = subscriptionPricePkr(pkg);
   const count = await Product.countDocuments({ businessOwner: req.user.id, isActive: true });
   const limit = BusinessProfile.packageLimit(pkg);
   if (count > limit) {
@@ -325,7 +325,7 @@ const changeSubscription = asyncHandler(async (req, res) => {
       return res.status(400).json({ success: false, message: 'paymentIntentId is required. Pay with Stripe first.' });
     }
     try {
-      await verifyBusinessSubscriptionPI(paymentIntentId, req.user.id, 'change', pkg, amountUsd);
+      await verifyBusinessSubscriptionPI(paymentIntentId, req.user.id, 'change', pkg, amountPkr);
     } catch (e) {
       return res.status(e.statusCode || 400).json({ success: false, message: e.message });
     }
@@ -333,7 +333,7 @@ const changeSubscription = asyncHandler(async (req, res) => {
   const payment = await Payment.create({
     payer: req.user.id,
     type: 'subscription',
-    amount: amountUsd,
+    amount: amountPkr,
     status: 'completed',
     externalRef: isStripeEnabled() ? paymentIntentId : 'mock-gateway-plan-change',
     meta: { package: pkg, cardLast4: req.body.cardLast4 || 'mock', invoiceRef: `SUB-CHG-${Date.now()}` },

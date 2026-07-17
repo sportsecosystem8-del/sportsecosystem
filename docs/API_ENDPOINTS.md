@@ -9,6 +9,7 @@ Auth: `Authorization: Bearer <JWT>` unless noted.
 | POST | `/auth/register` | Register player, coach, or business_owner (+ profile payload) |
 | POST | `/auth/login` | Login; returns JWT |
 | GET | `/auth/me` | Current user + profile |
+| DELETE | `/auth/me` | Permanently delete own account (body: `password`, `confirm: "DELETE"`); email can re-register |
 | POST | `/auth/password-reset-request` | Placeholder — records intent (email integration optional) |
 
 ## Player

@@ -49,6 +49,7 @@ const {
 } = require('../utils/skillGapAnalysis');
 const {
   coachPlatformSubscriptionActive,
+  getCoachPlatformSubscriptionPricePkr,
   getCoachPlatformSubscriptionPriceUsd,
 } = require('../utils/coachPlatformSubscription');
 const { formatMeetingWhen, buildMeetingInstructions } = require('../utils/trainingRequestMessages');
@@ -62,7 +63,7 @@ const {
 } = require('../utils/easypaisaPayments');
 const { finalizeGroundBookingConfirm } = require('../utils/atomicBooking');
 
-async function verifyCoachPlatformSubscriptionPI(paymentIntentId, userId, action, amountUsd) {
+async function verifyCoachPlatformSubscriptionPI(paymentIntentId, userId, action, amountPkr) {
   const pi = await retrieveSucceededPaymentIntent(paymentIntentId);
   if (pi.metadata.purpose !== 'coach_platform_subscription' || pi.metadata.userId !== String(userId)) {
     const err = new Error('Invalid payment');
@@ -74,7 +75,7 @@ async function verifyCoachPlatformSubscriptionPI(paymentIntentId, userId, action
     err.statusCode = 400;
     throw err;
   }
-  assertAmountMatches(pi, dollarsToCents(amountUsd));
+  assertAmountMatches(pi, dollarsToCents(amountPkr));
 }
 
 async function extendCoachPlatformPeriod(userId) {
@@ -406,14 +407,15 @@ const populatePlayerBrief = {
 const getProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).populate('coachProfile').lean();
   if (!user?.coachProfile) return res.status(404).json({ success: false, message: 'Profile not found' });
-  const priceUsd = await getCoachPlatformSubscriptionPriceUsd();
-  const subscriptionActive = priceUsd <= 0 || coachPlatformSubscriptionActive(user.coachProfile);
+  const pricePkr = await getCoachPlatformSubscriptionPricePkr();
+  const subscriptionActive = pricePkr <= 0 || coachPlatformSubscriptionActive(user.coachProfile);
   res.json({
     success: true,
     data: {
       ...user.coachProfile,
       subscriptionActive,
-      platformSubscriptionPriceUsd: priceUsd,
+      platformSubscriptionPricePkr: pricePkr,
+      platformSubscriptionPriceUsd: pricePkr,
     },
   });
 });
@@ -421,12 +423,13 @@ const getProfile = asyncHandler(async (req, res) => {
 const getCoachSubscriptionStatus = asyncHandler(async (req, res) => {
   const cp = await CoachProfile.findOne({ user: req.user.id }).lean();
   if (!cp) return res.status(404).json({ success: false, message: 'Profile not found' });
-  const priceUsd = await getCoachPlatformSubscriptionPriceUsd();
+  const pricePkr = await getCoachPlatformSubscriptionPricePkr();
   res.json({
     success: true,
     data: {
-      active: priceUsd <= 0 || coachPlatformSubscriptionActive(cp),
-      priceUsd,
+      active: pricePkr <= 0 || coachPlatformSubscriptionActive(cp),
+      pricePkr,
+      priceUsd: pricePkr,
       renewsAt: cp.platformSubscriptionRenewsAt || null,
     },
   });
@@ -440,32 +443,32 @@ const createCoachSubscriptionPaymentIntent = asyncHandler(async (req, res) => {
   if (!['subscribe', 'renew'].includes(action)) {
     return res.status(400).json({ success: false, message: 'action must be subscribe or renew' });
   }
-  const amountUsd = await getCoachPlatformSubscriptionPriceUsd();
-  if (amountUsd <= 0) {
+  const amountPkr = await getCoachPlatformSubscriptionPricePkr();
+  if (amountPkr <= 0) {
     return res.status(400).json({ success: false, message: 'Platform price is zero — no payment required.' });
   }
-  const amountCents = dollarsToCents(amountUsd);
-  if (amountCents < 50) {
+  const amountMinor = dollarsToCents(amountPkr);
+  if (amountPkr < 50) {
     return res.status(400).json({
       success: false,
-      message: 'Amount below Stripe minimum ($0.50). Increase coach_platform_subscription_usd in Admin → Settings.',
+      message: 'Amount below Stripe minimum (PKR 50). Increase coach_platform_subscription_pkr in Admin → Settings.',
     });
   }
   const stripe = getStripe();
   const pi = await stripe.paymentIntents.create({
-    amount: amountCents,
-    currency: 'usd',
+    amount: amountMinor,
+    currency: 'pkr',
     ...paymentIntentMethodSpec(),
     metadata: {
       purpose: 'coach_platform_subscription',
       action,
       userId: String(req.user.id),
-      amountCents: String(amountCents),
+      amountMinor: String(amountMinor),
     },
   });
   res.json({
     success: true,
-    data: { clientSecret: pi.client_secret, amount: amountUsd, action, currency: 'usd' },
+    data: { clientSecret: pi.client_secret, amount: amountPkr, action, currency: 'pkr' },
   });
 });
 

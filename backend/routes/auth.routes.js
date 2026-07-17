@@ -49,6 +49,16 @@ r.post('/login', authLimiter, [emailField('email'), body('password').notEmpty()]
 
 r.get('/me', authenticate, auth.me);
 
+r.delete(
+  '/me',
+  authenticate,
+  [
+    body('password').notEmpty().withMessage('Password is required to delete your account.'),
+    body('confirm').trim().notEmpty().withMessage('Confirmation is required.'),
+  ],
+  auth.deleteMyAccount
+);
+
 r.get(
   '/verify-email',
   authLimiter,

@@ -57,7 +57,7 @@ export default function AdminReports() {
               <span className="font-label text-sm text-slate-400">
                 <span className="font-orbitron font-bold tabular-nums text-admin-cyan">{row.count}</span>
                 <span className="mx-2 text-slate-600">×</span>
-                <span className="text-slate-300">total {row.total}</span>
+                <span className="text-slate-300">total PKR {Number(row.total).toLocaleString()}</span>
               </span>
             </li>
           ))}

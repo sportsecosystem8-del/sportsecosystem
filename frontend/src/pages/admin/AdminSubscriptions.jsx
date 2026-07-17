@@ -41,7 +41,9 @@ export default function AdminSubscriptions() {
                   <td className="px-6 py-3.5 font-label text-xs text-slate-400 sm:text-sm">
                     {p.createdAt ? new Date(p.createdAt).toLocaleString() : '—'}
                   </td>
-                  <td className="px-6 py-3.5 font-orbitron font-bold tabular-nums text-white">{p.amount}</td>
+                  <td className="px-6 py-3.5 font-orbitron font-bold tabular-nums text-white">
+                    PKR {Number(p.amount).toLocaleString()}
+                  </td>
                   <td className="px-6 py-3.5">
                     <span className="rounded-full bg-admin-cyan/10 px-2.5 py-0.5 font-label text-xs font-bold text-admin-cyan">
                       {p.status}

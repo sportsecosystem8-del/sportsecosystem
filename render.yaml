@@ -1,0 +1,54 @@
+# Render Blueprint — backend API only (frontend deploys separately on Vercel).
+# Dashboard: New → Blueprint → connect this repo, or create a Web Service with Root Directory = backend.
+services:
+  - type: web
+    name: sports-ecosystem-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: 'true'
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: USD_TO_PKR
+        value: '280'
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: '587'
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: groq
+      - key: AI_RECOMMENDATIONS_ENABLED
+        value: 'true'
+      - key: AI_TRAINING_PLAN_ENABLED
+        value: 'true'

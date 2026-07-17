@@ -29,7 +29,7 @@ const coachProfileSchema = new mongoose.Schema(
     locationMapUrl: { type: String, required: true, trim: true },
     /** Max concurrent students (soft cap) */
     maxStudents: { type: Number, default: 40, min: 1 },
-    /** Monthly platform access — admin-priced via SystemSettings `coach_platform_subscription_usd` */
+    /** Monthly platform access — admin-priced via SystemSettings `coach_platform_subscription_pkr` */
     platformSubscriptionRenewsAt: Date,
     /** Monthly training fee charged to players (PKR) — shown on coach profile & recommendations */
     monthlyTrainingFee: { type: Number, default: 0, min: 0 },

@@ -20,7 +20,7 @@ const nav = {
     { to: '/coach/grounds', label: 'Grounds' },
     { to: '/coach/performance', label: 'Evaluations' },
     { to: '/coach/feedback', label: 'Feedback' },
-    { to: '/coach/payments', label: 'Payments' },
+    { to: '/coach/payments', label: 'Fees record' },
     { to: '/coach/notifications', label: 'Notifications' },
     { to: '/coach/documents', label: 'Documents' },
   ],
@@ -92,8 +92,8 @@ export default function AppLayout() {
                               ? 'analytics'
                               : item.label === 'Feedback'
                                 ? 'strategy'
-                                : item.label === 'Payments'
-                                  ? 'payments'
+                                : item.label === 'Fees record'
+                                  ? 'receipt_long'
                                   : item.label === 'Notifications'
                                     ? 'notifications'
                                     : item.label === 'Documents'

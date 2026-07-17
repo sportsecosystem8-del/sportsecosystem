@@ -68,11 +68,11 @@ const populatePlayerBrief = {
 };
 
 const RECOMMENDATION_WEIGHTS = Object.freeze({
-  skill: 0.25,
+  skill: 0.32,
   category: 0.15,
-  time: 0.25,
-  location: 0.2,
-  performance: 0.15,
+  time: 0.23,
+  location: 0.18,
+  performance: 0.12,
 });
 
 function clamp01(v) {
@@ -270,21 +270,28 @@ function scoreSkill(profile, sportPreference, playerLevel) {
   const rating = clamp01((profile?.averageRating || 0) / 5);
   const confidence = clamp01((profile?.ratingCount || 0) / 20);
   const years = clamp01((profile?.yearsExperience || 0) / 12);
+  const level = String(playerLevel || 'beginner').trim().toLowerCase();
 
-  const preferred = Array.isArray(profile?.preferredPlayerLevels) ? profile.preferredPlayerLevels : [];
+  const preferred = Array.isArray(profile?.preferredPlayerLevels)
+    ? profile.preferredPlayerLevels.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
+    : [];
   let levelFit;
   let levelDetail;
   if (preferred.length > 0) {
-    levelFit = preferred.includes(playerLevel) ? 1 : 0;
-    levelDetail = levelFit ? 'Coach trains your skill level.' : 'Coach prefers other skill levels.';
+    levelFit = preferred.includes(level) ? 1 : 0;
+    levelDetail = levelFit
+      ? `Coach trains ${level} players.`
+      : `Coach prefers ${preferred.join(', ')} — not your ${level} level.`;
   } else {
+    // Prefer coaches who set levels; without them, mild experience-based estimate only.
     const coachLevel = years > 0.66 ? 2 : years > 0.33 ? 1 : 0;
-    const levelGap = Math.abs(coachLevel - levelToIndex(playerLevel));
+    const levelGap = Math.abs(coachLevel - levelToIndex(level));
     levelFit = 1 - clamp01(levelGap / 2);
     levelDetail = 'Skill fit estimated from coach experience (set preferred levels in profile for better matching).';
   }
 
-  const score = clamp01(0.35 * sportMatch + 0.25 * rating + 0.15 * confidence + 0.1 * years + 0.15 * levelFit);
+  // Level fit dominates so matching preferredPlayerLevels meaningfully ranks coaches.
+  const score = clamp01(0.2 * sportMatch + 0.15 * rating + 0.1 * confidence + 0.05 * years + 0.5 * levelFit);
   const detail = sportMatch
     ? preferred.length
       ? levelDetail
@@ -420,7 +427,8 @@ const getRecommendations = asyncHandler(async (req, res) => {
       return coachMatchesPlayerCategory(c.coachProfile, p.playerCategory);
     })
     .map((c) => {
-      const skill = scoreSkill(c.coachProfile, p.sportPreference, playerSignal.level);
+      // Always match on profile skillLevel — weekly evals feed performance fit only.
+      const skill = scoreSkill(c.coachProfile, p.sportPreference, p.skillLevel || 'beginner');
       const category = scoreCategoryFit(c.coachProfile, p.sportPreference, p.playerCategory);
       const time = scoreTimeOverlap(playerTimeSlots, c.coachProfile.availability);
       const location = scoreLocation(p.city, c.coachProfile);
@@ -518,6 +526,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
       };
       const ai = await generateCoachRecommendations(aiInput);
       const byId = new Map(scored.map((s) => [String(s.coachUser._id), s]));
+      // Keep AI-selected candidates, but always order by baseline matchScore so UI ranking matches scores.
       finalRows = ai.rankedCoaches
         .map((row) => {
           const base = byId.get(String(row.userId));
@@ -531,6 +540,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
           };
         })
         .filter(Boolean)
+        .sort((a, b) => b.matchScore - a.matchScore)
         .slice(0, limit);
 
       if (!finalRows.length) {

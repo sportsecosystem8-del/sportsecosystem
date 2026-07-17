@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import DeleteAccountSection from '../../components/shared/DeleteAccountSection';
 import { publicAssetUrl } from '../../utils/assetUrl';
 import { api, getErrorMessage } from '../../services/api';
 
@@ -175,6 +176,8 @@ export default function BusinessStoreSettings() {
           {busy ? 'Saving…' : 'Save store'}
         </button>
       </form>
+
+      <DeleteAccountSection className="mt-10" />
     </div>
   );
 }

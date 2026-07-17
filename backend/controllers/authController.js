@@ -42,6 +42,7 @@ function makeToken() {
 }
 
 const { getPublicAppUrlForEmailLinks } = require('../utils/publicAppUrl');
+const { deleteUserAccount } = require('../utils/deleteUserAccount');
 
 function frontendBaseUrl() {
   return getPublicAppUrlForEmailLinks();
@@ -383,6 +384,41 @@ const passwordResetConfirm = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Password has been reset successfully.' });
 });
 
+/** Permanently delete the authenticated user's account so the same email can register again. */
+const deleteMyAccount = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+  if (req.user.role === 'admin') {
+    return res.status(403).json({ success: false, message: 'Admin accounts cannot be deleted this way.' });
+  }
+
+  const password = String(req.body.password || '');
+  const confirm = String(req.body.confirm || '').trim().toUpperCase();
+  if (confirm !== 'DELETE') {
+    return res.status(400).json({
+      success: false,
+      message: 'Type DELETE to confirm permanent account deletion.',
+    });
+  }
+
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'User not found' });
+  }
+  if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+    return res.status(401).json({ success: false, message: 'Incorrect password' });
+  }
+
+  const deleted = await deleteUserAccount(user._id);
+  res.json({
+    success: true,
+    message: 'Account deleted permanently. You can register again with the same email.',
+    data: { email: deleted.email },
+  });
+});
+
 module.exports = {
   register,
   login,
@@ -391,5 +427,6 @@ module.exports = {
   passwordResetConfirm,
   verifyEmail,
   resendVerification,
+  deleteMyAccount,
   signToken,
 };

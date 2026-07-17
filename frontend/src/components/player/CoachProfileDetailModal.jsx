@@ -166,20 +166,6 @@ export default function CoachProfileDetailModal({
             </div>
           ) : null}
 
-          {coachRow?.matchScore != null ? (
-            <div className="mt-4 rounded-lg border border-player-green/20 bg-player-green/5 p-3">
-              <p className="font-headline text-[10px] uppercase tracking-wider text-player-green">Your match</p>
-              <p className="mt-1 text-sm text-slate-200">Score: {coachRow.matchScore?.toFixed?.(1) ?? coachRow.matchScore}</p>
-              {coachRow.reasons?.length ? (
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-slate-400">
-                  {coachRow.reasons.map((r) => (
-                    <li key={r}>{r}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-
           <div className="mt-5">
             <p className="font-headline text-sm font-bold uppercase tracking-wide text-player-green">Player reviews</p>
             {reviews.length ? (

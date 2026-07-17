@@ -137,7 +137,7 @@ export default function AdminGrounds() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Ground management"
-        subtitle="Register indoor grounds and assign sport types for player bookings."
+        subtitle="Register and monitor platform grounds you add (business-owner grounds stay in their panel)."
       />
       {err ? (
         <AdminCard accent="orange" className="p-4">
@@ -383,7 +383,7 @@ export default function AdminGrounds() {
       </AdminCard>
 
       <div className="space-y-4">
-        <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">All grounds</h2>
+        <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-white">Your grounds</h2>
         {!list.length ? (
           <AdminCard accent="none" className="border border-white/[0.06] p-12 text-center">
             <p className="font-label text-sm text-slate-500">No grounds yet.</p>

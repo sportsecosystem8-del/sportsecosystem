@@ -78,7 +78,7 @@ export default function CoachSubscription() {
     }
   };
 
-  const price = status?.priceUsd;
+  const price = status?.pricePkr ?? status?.priceUsd;
   const freeTier = typeof price === 'number' && price <= 0;
 
   return (
@@ -102,7 +102,7 @@ export default function CoachSubscription() {
           {!freeTier ? (
             <>
               <p className="mt-1 text-sm text-slate-400">
-                Monthly price: <span className="text-[#ff7524]">${Number(price).toFixed(2)} USD</span>
+                Monthly price: <span className="text-[#ff7524]">PKR {Number(price).toLocaleString()}</span>
               </p>
               {status.renewsAt ? (
                 <p className="mt-1 text-sm text-slate-400">

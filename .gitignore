@@ -3,6 +3,7 @@ dist/
 .env
 .env.local
 backend/.env
+backend/render.env
 frontend/.env
 backend/uploads/
 *.log

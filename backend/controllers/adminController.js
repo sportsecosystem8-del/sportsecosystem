@@ -22,6 +22,22 @@ const { notifyUser } = require('../utils/notify');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
 const { isMailerConfigured } = require('../utils/mailer');
 const { isStripeEnabled } = require('../utils/stripePayments');
+const { deleteUserAccount } = require('../utils/deleteUserAccount');
+const { toPkrAmount } = require('../utils/coachPlatformSubscription');
+
+/** Grounds listed by platform admin (not business owners). */
+function adminOwnedGroundFilter() {
+  return {
+    $and: [
+      { $or: [{ businessOwner: null }, { businessOwner: { $exists: false } }] },
+      { $or: [{ listedBy: 'admin' }, { listedBy: { $exists: false } }, { listedBy: null }] },
+    ],
+  };
+}
+
+async function adminOwnedGroundIds() {
+  return IndoorGround.find(adminOwnedGroundFilter()).distinct('_id');
+}
 
 /** Mongoose 8 requires update operators; plain `{ status }` may not persist. */
 function verificationDocStatusForAction(action) {
@@ -62,26 +78,45 @@ const dashboard = asyncHandler(async (req, res) => {
     User.countDocuments({ role: 'business_owner' }),
     User.countDocuments({ role: 'admin' }),
   ]);
-  const bookings = await GroundBooking.countDocuments({ status: 'confirmed' });
+  const adminGroundIds = await adminOwnedGroundIds();
+  const bookings = await GroundBooking.countDocuments({
+    status: 'confirmed',
+    ground: { $in: adminGroundIds },
+  });
   const [subscriptionRev, localRev] = await Promise.all([
     Payment.aggregate([
       { $match: { status: 'completed', type: 'subscription' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
     Payment.aggregate([
-      { $match: { status: 'completed', type: { $in: ['ground_booking', 'product', 'coach_fee'] } } },
+      {
+        $match: {
+          status: 'completed',
+          $or: [
+            { type: { $in: ['product', 'coach_fee'] } },
+            { type: 'ground_booking', $or: [{ payee: null }, { payee: { $exists: false } }] },
+          ],
+        },
+      },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
   ]);
+  const subscriptionRaw = subscriptionRev[0]?.total || 0;
+  const revenueSubscriptionPkr = toPkrAmount(subscriptionRaw);
+  const revenueLocalPkr = localRev[0]?.total || 0;
+  const revenueTotalPkr = revenueSubscriptionPkr + revenueLocalPkr;
   /** Dashboard health indicators */
   res.json({
     success: true,
     data: {
       users: { players, coaches, businesses, admins },
       bookingsConfirmed: bookings,
-      revenueTotal: (subscriptionRev[0]?.total || 0) + (localRev[0]?.total || 0),
-      revenueSubscriptionUsd: subscriptionRev[0]?.total || 0,
-      revenueLocalPkr: localRev[0]?.total || 0,
+      revenueTotalPkr,
+      revenueSubscriptionPkr,
+      revenueLocalPkr,
+      // Legacy aliases (all PKR — do not mix currencies)
+      revenueTotal: revenueTotalPkr,
+      revenueSubscriptionUsd: revenueSubscriptionPkr,
       health: {
         database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
         uptimeSec: Math.floor(process.uptime()),
@@ -241,23 +276,7 @@ const patchUser = asyncHandler(async (req, res) => {
 const deleteUser = asyncHandler(async (req, res) => {
   const u = await User.findById(req.params.id);
   if (!u || u.role === 'admin') return res.status(403).json({ success: false, message: 'Cannot delete' });
-
-  if (u.role === 'coach') {
-    await CoachProfile.deleteMany({
-      $or: [{ user: u._id }, ...(u.coachProfile ? [{ _id: u.coachProfile }] : [])],
-    });
-  } else if (u.role === 'player') {
-    await PlayerProfile.deleteMany({
-      $or: [{ user: u._id }, ...(u.playerProfile ? [{ _id: u.playerProfile }] : [])],
-    });
-  } else if (u.role === 'business_owner') {
-    await BusinessProfile.deleteMany({
-      $or: [{ user: u._id }, ...(u.businessProfile ? [{ _id: u.businessProfile }] : [])],
-    });
-  }
-
-  await VerificationDocument.deleteMany({ user: u._id });
-  await u.deleteOne();
+  await deleteUserAccount(u._id);
   res.json({ success: true, message: 'Deleted' });
 });
 
@@ -296,7 +315,7 @@ const deleteSport = asyncHandler(async (req, res) => {
 });
 
 const listGrounds = asyncHandler(async (req, res) => {
-  const list = await IndoorGround.find().sort({ name: 1 }).lean();
+  const list = await IndoorGround.find(adminOwnedGroundFilter()).sort({ name: 1 }).lean();
   res.json({ success: true, data: list });
 });
 
@@ -325,28 +344,40 @@ const createGround = asyncHandler(async (req, res) => {
   if (!Number.isFinite(areaSqFt) || areaSqFt < 1) {
     return res.status(400).json({ success: false, message: 'areaSqFt must be at least 1' });
   }
-  const g = await IndoorGround.create(sanitizeGroundPayload(req.body));
+  const g = await IndoorGround.create({
+    ...sanitizeGroundPayload(req.body),
+    listedBy: 'admin',
+    businessOwner: undefined,
+  });
   res.status(201).json({ success: true, data: g });
 });
 
 const updateGround = asyncHandler(async (req, res) => {
   const payload = sanitizeGroundPayload(req.body);
+  delete payload.businessOwner;
+  payload.listedBy = 'admin';
   if (payload.imagePaths) {
     const imageErr = validateGroundImages(payload.imagePaths);
     if (imageErr) return res.status(400).json({ success: false, message: imageErr });
   }
-  const g = await IndoorGround.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+  const g = await IndoorGround.findOneAndUpdate(
+    { _id: req.params.id, ...adminOwnedGroundFilter() },
+    { $set: payload },
+    { new: true, runValidators: true }
+  );
   if (!g) return res.status(404).json({ success: false, message: 'Not found' });
   res.json({ success: true, data: g });
 });
 
 const deleteGround = asyncHandler(async (req, res) => {
-  await IndoorGround.findByIdAndDelete(req.params.id);
+  const g = await IndoorGround.findOneAndDelete({ _id: req.params.id, ...adminOwnedGroundFilter() });
+  if (!g) return res.status(404).json({ success: false, message: 'Not found' });
   res.json({ success: true, message: 'Deleted' });
 });
 
 const monitorBookings = asyncHandler(async (req, res) => {
-  const bookings = await GroundBooking.find()
+  const adminGroundIds = await adminOwnedGroundIds();
+  const bookings = await GroundBooking.find({ ground: { $in: adminGroundIds } })
     .populate('ground')
     .populate('bookedBy', 'email role')
     .sort({ startTime: -1 })
@@ -357,10 +388,14 @@ const monitorBookings = asyncHandler(async (req, res) => {
 
 const monitorPerformance = asyncHandler(async (req, res) => {
   const mem = process.memoryUsage();
+  const adminGroundIds = await adminOwnedGroundIds();
   const [users, bookings, payments] = await Promise.all([
     User.countDocuments(),
-    GroundBooking.countDocuments(),
-    Payment.countDocuments({ status: 'completed' }),
+    GroundBooking.countDocuments({ ground: { $in: adminGroundIds } }),
+    Payment.countDocuments({
+      status: 'completed',
+      $nor: [{ type: 'ground_booking', payee: { $exists: true, $ne: null } }],
+    }),
   ]);
   res.json({
     success: true,
@@ -410,22 +445,32 @@ const patchComplaint = asyncHandler(async (req, res) => {
 });
 
 const reportsSummary = asyncHandler(async (req, res) => {
-  const byType = await Payment.aggregate([
-    { $match: { status: 'completed' } },
+  const rawByType = await Payment.aggregate([
+    {
+      $match: {
+        status: 'completed',
+        $nor: [{ type: 'ground_booking', payee: { $exists: true, $ne: null } }],
+      },
+    },
     { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } },
   ]);
+  const byType = rawByType.map((row) => ({
+    ...row,
+    total: row._id === 'subscription' ? toPkrAmount(row.total) : Math.round(Number(row.total) || 0),
+    currency: 'PKR',
+  }));
   /** PDF export */
   if (req.query.format === 'pdf') {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="platform-revenue-report.pdf"');
     const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
-    doc.fontSize(18).text('Sports Ecosystem — Payment summary', { align: 'center' });
+    doc.fontSize(18).text('Sports Ecosystem — Payment summary (PKR)', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).text(`Generated: ${new Date().toISOString()}`, { align: 'center' });
     doc.moveDown();
     byType.forEach((row) => {
-      doc.fontSize(12).text(`${row._id}: ${row.count} transactions, total ${row.total}`);
+      doc.fontSize(12).text(`${row._id}: ${row.count} transactions, total PKR ${row.total}`);
       doc.moveDown(0.4);
     });
     doc.end();
