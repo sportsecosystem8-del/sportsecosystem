@@ -23,7 +23,11 @@ export default function CoachProfile() {
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
   const [academyLocation, setAcademyLocation] = useState('');
+  const [academyName, setAcademyName] = useState('');
   const [locationMapUrl, setLocationMapUrl] = useState('');
+  const [latitude, setLatitude] = useState(null);
+  const [longitude, setLongitude] = useState(null);
+  const [geoBusy, setGeoBusy] = useState(false);
   const [yearsExperience, setYearsExperience] = useState(0);
   const [specialties, setSpecialties] = useState([]);
   const [preferredPlayerLevels, setPreferredPlayerLevels] = useState([]);
@@ -48,7 +52,10 @@ export default function CoachProfile() {
         setBio(p.bio || '');
         setCity(p.city || '');
         setAcademyLocation(p.academyLocation || '');
+        setAcademyName(p.academyName || '');
         setLocationMapUrl(p.locationMapUrl || '');
+        setLatitude(p.latitude ?? null);
+        setLongitude(p.longitude ?? null);
         setYearsExperience(p.yearsExperience ?? 0);
         setSpecialties(Array.isArray(p.specialties) ? p.specialties : []);
         setPreferredPlayerLevels(Array.isArray(p.preferredPlayerLevels) ? p.preferredPlayerLevels : []);
@@ -78,8 +85,11 @@ export default function CoachProfile() {
         fullName,
         bio,
         city,
+        academyName: academyName.trim(),
         academyLocation,
         locationMapUrl: locationMapUrl.trim(),
+        latitude: latitude != null ? latitude : null,
+        longitude: longitude != null ? longitude : null,
         yearsExperience: Number.parseInt(yearsExperience, 10) || 0,
         specialties,
         preferredPlayerLevels,
@@ -250,10 +260,52 @@ export default function CoachProfile() {
         />
         <input
           className={coachField}
+          placeholder="Academy name"
+          value={academyName}
+          onChange={(e) => setAcademyName(e.target.value)}
+        />
+        <input
+          className={coachField}
           placeholder="Academy location (address or area)"
           value={academyLocation}
           onChange={(e) => setAcademyLocation(e.target.value)}
         />
+        <div>
+          <p className="mb-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">Academy map pin</p>
+          <p className="mb-2 text-xs text-slate-400">
+            {latitude != null && longitude != null
+              ? `Saved: ${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`
+              : 'Optional — helps players find nearest academies.'}
+          </p>
+          <button
+            type="button"
+            disabled={geoBusy}
+            className="rounded-lg border border-[#ff7524]/40 px-3 py-2 text-xs font-bold uppercase tracking-wider text-[#ff7524] hover:bg-[#ff7524]/10 disabled:opacity-50"
+            onClick={() => {
+              if (!navigator.geolocation) {
+                setErr('Geolocation is not supported in this browser.');
+                return;
+              }
+              setGeoBusy(true);
+              setErr('');
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  setLatitude(pos.coords.latitude);
+                  setLongitude(pos.coords.longitude);
+                  setGeoBusy(false);
+                  setMsg('Academy pin captured — save profile to keep it.');
+                },
+                () => {
+                  setGeoBusy(false);
+                  setErr('Could not read location. Allow access and try again.');
+                },
+                { enableHighAccuracy: true, timeout: 15000 }
+              );
+            }}
+          >
+            {geoBusy ? 'Locating…' : 'Use my location'}
+          </button>
+        </div>
         <input
           className={coachField}
           placeholder="Google Maps link"

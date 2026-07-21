@@ -30,6 +30,8 @@ r.post('/store/logo', uploadImage.single('image'), b.uploadStoreLogo);
 r.delete('/store/logo', b.removeStoreLogo);
 r.post('/store/banner', uploadImage.single('image'), b.uploadStoreBanner);
 r.delete('/store/banner', b.removeStoreBanner);
+r.post('/store/shop-photos', uploadImage.single('image'), b.uploadShopPhoto);
+r.delete('/store/shop-photos', [body('url').trim().notEmpty()], validateRequest, b.removeShopPhoto);
 r.get('/products', b.listMyProducts);
 r.post('/products', b.addProduct);
 r.put('/products/:id', b.updateProduct);

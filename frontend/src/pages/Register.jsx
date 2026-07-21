@@ -27,8 +27,10 @@ export default function Register() {
   const [playerCategory, setPlayerCategory] = useState('');
   const [yearsExperience, setYearsExperience] = useState('');
   const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
   const [specialties, setSpecialties] = useState('cricket');
   const [academyLocation, setAcademyLocation] = useState('');
+  const [academyName, setAcademyName] = useState('');
   const [locationMapUrl, setLocationMapUrl] = useState('');
   const [businessLocationMapUrl, setBusinessLocationMapUrl] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -36,7 +38,7 @@ export default function Register() {
 
   const buildProfile = () => {
     if (role === 'player') {
-      const profile = { fullName, phone, sportPreference, skillLevel, city };
+      const profile = { fullName, phone, sportPreference, skillLevel, city, address: address.trim() || undefined };
       if (sportPreference === 'cricket') profile.playerCategory = playerCategory;
       return profile;
     }
@@ -45,6 +47,7 @@ export default function Register() {
         fullName,
         phone,
         specialties: [specialties],
+        academyName: academyName.trim() || undefined,
         academyLocation,
         city,
         yearsExperience: yearsExperience !== '' ? Number.parseInt(yearsExperience, 10) : undefined,
@@ -206,6 +209,15 @@ export default function Register() {
                   <input className={inputClass} value={city} onChange={(e) => setCity(e.target.value)} />
                 </div>
                 <div>
+                  <label className={labelClass}>Full address</label>
+                  <input
+                    className={inputClass}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Street, area, landmark"
+                  />
+                </div>
+                <div>
                   <label className={labelClass}>Phone</label>
                   <input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
                 </div>
@@ -230,6 +242,15 @@ export default function Register() {
                     <option value="cricket">Cricket</option>
                     <option value="badminton">Badminton</option>
                   </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Academy name</label>
+                  <input
+                    className={inputClass}
+                    value={academyName}
+                    onChange={(e) => setAcademyName(e.target.value)}
+                    placeholder="e.g. Elite Cricket Academy"
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Academy location</label>

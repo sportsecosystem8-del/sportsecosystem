@@ -274,7 +274,7 @@ export default function PlayerMyCoach() {
     const seen = new Set();
     const list = [];
     for (const req of trainingRequests) {
-      if (req.status !== 'accepted') continue;
+      if (req.status !== 'accepted' || !(req.feesClearedAt || req.feesCleared)) continue;
       const coach = req.coach;
       const coachId = String(coach?._id || coach || '');
       if (!coachId || seen.has(coachId)) continue;
@@ -292,7 +292,7 @@ export default function PlayerMyCoach() {
     <div>
       <PlayerPageHeader
         title="My coach"
-        subtitle="Your accepted coaches — view profile details and leave feedback."
+        subtitle="Coaches with fees cleared — view profile details and leave feedback."
       />
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
       {loading ? (
@@ -300,7 +300,7 @@ export default function PlayerMyCoach() {
       ) : myCoaches.length === 0 ? (
         <PlayerCard className="p-6">
           <p className="text-sm text-player-on-variant">
-            No coach assigned yet. Send a training request from{' '}
+            No coach assigned yet. After a coach accepts and clears fees, they appear here. Send a request from{' '}
             <Link to="/player/coaches" className="font-semibold text-player-green hover:underline">
               Recommend coaches
             </Link>

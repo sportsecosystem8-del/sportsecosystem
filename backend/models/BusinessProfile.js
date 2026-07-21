@@ -23,6 +23,8 @@ const businessProfileSchema = new mongoose.Schema(
     /** Storefront branding & policies */
     storeLogoUrl: String,
     storeBannerUrl: String,
+    /** Multi-photo shop gallery (like coach academy photos) */
+    shopImageUrls: [{ type: String, trim: true }],
     shippingPolicyText: String,
     returnPolicyText: String,
     /** Easypaisa mobile account (03XXXXXXXXX) — receives ground & product payments */

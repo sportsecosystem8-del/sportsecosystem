@@ -10,9 +10,11 @@ export default function BusinessStoreSettings() {
   const [returnPolicyText, setReturnPolicyText] = useState('');
   const [storeLogoUrl, setStoreLogoUrl] = useState('');
   const [storeBannerUrl, setStoreBannerUrl] = useState('');
+  const [shopImageUrls, setShopImageUrls] = useState([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploadingShop, setUploadingShop] = useState(false);
 
   const load = () =>
     api
@@ -25,6 +27,7 @@ export default function BusinessStoreSettings() {
         setReturnPolicyText(p?.returnPolicyText || '');
         setStoreLogoUrl(p?.storeLogoUrl || '');
         setStoreBannerUrl(p?.storeBannerUrl || '');
+        setShopImageUrls(Array.isArray(p?.shopImageUrls) ? p.shopImageUrls : []);
       })
       .catch((e) => setErr(getErrorMessage(e)));
 
@@ -79,6 +82,41 @@ export default function BusinessStoreSettings() {
       if (field === 'storeLogoUrl') setStoreLogoUrl('');
       if (field === 'storeBannerUrl') setStoreBannerUrl('');
       setMsg('Image removed.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    }
+  };
+
+  const uploadShopPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (shopImageUrls.length >= 12) {
+      setErr('Maximum 12 shop photos allowed.');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('image', file);
+    setUploadingShop(true);
+    setErr('');
+    try {
+      const { data } = await api.post('/business/store/shop-photos', fd);
+      setShopImageUrls(Array.isArray(data.data?.shopImageUrls) ? data.data.shopImageUrls : []);
+      setMsg('Shop photo uploaded.');
+    } catch (er) {
+      setErr(getErrorMessage(er));
+    } finally {
+      setUploadingShop(false);
+    }
+  };
+
+  const removeShopPhoto = async (url) => {
+    if (!window.confirm('Remove this shop photo?')) return;
+    setErr('');
+    try {
+      const { data } = await api.delete('/business/store/shop-photos', { data: { url } });
+      setShopImageUrls(Array.isArray(data.data?.shopImageUrls) ? data.data.shopImageUrls : []);
+      setMsg('Shop photo removed.');
     } catch (er) {
       setErr(getErrorMessage(er));
     }
@@ -149,6 +187,36 @@ export default function BusinessStoreSettings() {
             ) : null}
             <input type="file" accept="image/*" className="mt-2 text-xs text-slate-400" onChange={(e) => uploadBrand(e, '/business/store/banner', 'storeBannerUrl')} />
           </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Shop photos ({shopImageUrls.length}/12)
+          </label>
+          <p className="mt-1 text-[11px] text-slate-500">Gallery of your store — shown to players and admins.</p>
+          {shopImageUrls.length ? (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {shopImageUrls.map((url) => (
+                <div key={url} className="relative overflow-hidden rounded-lg border border-white/10">
+                  <img src={publicAssetUrl(url)} alt="" className="h-24 w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeShopPhoto(url)}
+                    className="absolute right-1 top-1 rounded-full bg-red-600 px-1.5 text-[10px] text-white"
+                    aria-label="Remove shop photo"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <input
+            type="file"
+            accept="image/*"
+            className="mt-2 text-xs text-slate-400"
+            disabled={uploadingShop || shopImageUrls.length >= 12}
+            onChange={uploadShopPhoto}
+          />
         </div>
         <div>
           <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Shipping policy</label>

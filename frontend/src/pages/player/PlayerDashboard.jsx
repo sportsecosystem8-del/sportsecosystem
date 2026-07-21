@@ -156,7 +156,7 @@ export default function PlayerDashboard() {
     const seen = new Set();
     const list = [];
     for (const req of trainingRequests) {
-      if (req.status !== 'accepted') continue;
+      if (req.status !== 'accepted' || !(req.feesClearedAt || req.feesCleared)) continue;
       const coach = req.coach;
       const coachId = String(coach?._id || coach || '');
       if (!coachId || seen.has(coachId)) continue;

@@ -87,7 +87,10 @@ export default function CoachPayments() {
 
       <section className="midnight-asymmetric border border-[#ff7524]/25 bg-player-container p-6">
         <h2 className="font-headline text-lg uppercase tracking-[0.12em] text-white">Student fee records</h2>
-        <p className="mt-1 text-xs text-slate-500">Track each student&apos;s name, joining date, and monthly fee.</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Track each student&apos;s name, joining date, and monthly fee. Active fees are included in dashboard Total
+          Received (PKR).
+        </p>
         <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={saveFee}>
           <div className="sm:col-span-2">
             <label className={coachLabel}>Student</label>

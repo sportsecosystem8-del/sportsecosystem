@@ -7,6 +7,8 @@ const coachProfileSchema = new mongoose.Schema(
     fullName: { type: String, required: true, trim: true },
     /** Public coach headshot — JPG/PNG via POST /coaches/me/profile-photo */
     profilePhotoUrl: String,
+    /** Academy / facility brand name shown to players */
+    academyName: { type: String, trim: true },
     /** Academy / facility photos shown on public coach profile */
     academyImageUrls: [{ type: String, trim: true }],
     phone: String,
@@ -19,6 +21,9 @@ const coachProfileSchema = new mongoose.Schema(
     defaultSessionDurationMinutes: { type: Number, default: 60, min: 15, max: 240 },
     academyLocation: String,
     city: String,
+    /** Optional academy map pin for nearest-player matching */
+    latitude: { type: Number, min: -90, max: 90 },
+    longitude: { type: Number, min: -180, max: 180 },
     bio: String,
     yearsExperience: { type: Number, default: 0 },
     availability: [scheduleSlotSchema],

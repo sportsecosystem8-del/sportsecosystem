@@ -16,20 +16,26 @@ export default function CoachDashboard() {
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      api.get('/coaches/dashboard'),
-      api.get('/coaches/notifications'),
-      api.get('/coaches/me/profile'),
-    ])
-      .then(([dash, notif, prof]) => {
-        setStats(dash.data.data);
-        const ver = (notif.data.data || []).filter((n) => n.category === 'verification').slice(0, 5);
-        setVerificationNotes(ver);
-        setProfile(prof.data.data);
-      })
-      .catch((e) => setErr(getErrorMessage(e)))
-      .finally(() => setLoading(false));
+    const loadDashboard = () => {
+      setLoading(true);
+      Promise.all([
+        api.get('/coaches/dashboard'),
+        api.get('/coaches/notifications'),
+        api.get('/coaches/me/profile'),
+      ])
+        .then(([dash, notif, prof]) => {
+          setStats(dash.data.data);
+          const ver = (notif.data.data || []).filter((n) => n.category === 'verification').slice(0, 5);
+          setVerificationNotes(ver);
+          setProfile(prof.data.data);
+        })
+        .catch((e) => setErr(getErrorMessage(e)))
+        .finally(() => setLoading(false));
+    };
+    loadDashboard();
+    const onFocus = () => loadDashboard();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const chart = stats?.weeklyChart || [];
@@ -107,8 +113,9 @@ export default function CoachDashboard() {
         <div className="midnight-asymmetric border-l-4 border-player-green bg-player-container p-5 shadow-player-card">
           <p className="font-headline text-xs uppercase tracking-[0.16em] text-player-on-variant">Total Received</p>
           <p className="mt-2 font-orbitron text-3xl font-bold text-white">
-            {loading ? '…' : `$${formatMoney(stats?.totalReceived)}`}
+            {loading ? '…' : `PKR ${formatMoney(stats?.totalReceived)}`}
           </p>
+          <p className="mt-1 text-[10px] text-slate-500">Payments + fees record</p>
         </div>
         <div className="midnight-asymmetric border-l-4 border-violet-400 bg-player-container p-5 shadow-player-card">
           <p className="font-headline text-xs uppercase tracking-[0.16em] text-player-on-variant">Session Readiness</p>

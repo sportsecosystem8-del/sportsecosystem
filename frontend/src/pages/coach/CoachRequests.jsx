@@ -3,11 +3,7 @@ import PlayerTrainingRequestCard from '../../components/coach/PlayerTrainingRequ
 import CoachSearchField from '../../components/coach/CoachSearchField';
 import { api, getErrorMessage } from '../../services/api';
 import { matchesTrainingRequestQuery } from '../../utils/coachStudents';
-import { coachAcademyLabel, coachMapUrl } from '../../utils/coachLocation';
-
-function coachLocationOrigin(coachProfile) {
-  return coachMapUrl(coachProfile) || coachAcademyLabel(coachProfile) || '';
-}
+import { coachAcademyLabel } from '../../utils/coachLocation';
 
 export default function CoachRequests() {
   const [list, setList] = useState([]);
@@ -15,7 +11,7 @@ export default function CoachRequests() {
   const [info, setInfo] = useState('');
   const [scheduledAtById, setScheduledAtById] = useState({});
   const [meetingLocationById, setMeetingLocationById] = useState({});
-  const [coachOrigin, setCoachOrigin] = useState('');
+  const [meetingDefaultLocation, setMeetingDefaultLocation] = useState('');
   const [coachProfile, setCoachProfile] = useState(null);
   const [query, setQuery] = useState('');
   const [rollNoById, setRollNoById] = useState({});
@@ -38,7 +34,7 @@ export default function CoachRequests() {
       .then((r) => {
         const p = r.data?.data;
         setCoachProfile(p);
-        setCoachOrigin(coachLocationOrigin(p));
+        setMeetingDefaultLocation(coachAcademyLabel(p) || '');
       })
       .catch(() => {});
   }, []);
@@ -54,8 +50,8 @@ export default function CoachRequests() {
         ? {
             status,
             scheduledAt: new Date(selected).toISOString(),
-            meetingLocation: meetingLocationById[id] || coachOrigin || undefined,
-            meetingAcademyName: coachProfile?.fullName || undefined,
+            meetingLocation: meetingLocationById[id] || meetingDefaultLocation || undefined,
+            meetingAcademyName: coachProfile?.academyName || coachProfile?.fullName || undefined,
           }
         : { status };
     setBusyId(id);
@@ -154,10 +150,10 @@ export default function CoachRequests() {
           <PlayerTrainingRequestCard
             key={r._id}
             request={r}
-            coachOrigin={coachOrigin}
             scheduledAt={scheduledAtById[r._id] || ''}
             onScheduledAtChange={(value) => setScheduledAtById((prev) => ({ ...prev, [r._id]: value }))}
-            meetingLocation={meetingLocationById[r._id] ?? coachOrigin}
+            meetingLocation={meetingLocationById[r._id] ?? meetingDefaultLocation}
+            meetingLocationPlaceholder={meetingDefaultLocation || 'Academy address'}
             onMeetingLocationChange={(value) => setMeetingLocationById((prev) => ({ ...prev, [r._id]: value }))}
             rollNo={rollNoById[r._id] ?? ''}
             onRollNoChange={(value) => setRollNoById((prev) => ({ ...prev, [r._id]: value }))}

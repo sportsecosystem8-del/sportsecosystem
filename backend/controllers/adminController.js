@@ -83,7 +83,7 @@ const dashboard = asyncHandler(async (req, res) => {
     status: 'confirmed',
     ground: { $in: adminGroundIds },
   });
-  const [subscriptionRev, localRev] = await Promise.all([
+  const [subscriptionRev, localRev, marketplaceRev] = await Promise.all([
     Payment.aggregate([
       { $match: { status: 'completed', type: 'subscription' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -92,10 +92,17 @@ const dashboard = asyncHandler(async (req, res) => {
       {
         $match: {
           status: 'completed',
-          $or: [
-            { type: { $in: ['product', 'coach_fee'] } },
-            { type: 'ground_booking', $or: [{ payee: null }, { payee: { $exists: false } }] },
-          ],
+          type: 'ground_booking',
+          $or: [{ payee: null }, { payee: { $exists: false } }],
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]),
+    Payment.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          type: { $in: ['product', 'coach_fee'] },
         },
       },
       { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -104,6 +111,7 @@ const dashboard = asyncHandler(async (req, res) => {
   const subscriptionRaw = subscriptionRev[0]?.total || 0;
   const revenueSubscriptionPkr = toPkrAmount(subscriptionRaw);
   const revenueLocalPkr = localRev[0]?.total || 0;
+  const marketplaceVolumePkr = marketplaceRev[0]?.total || 0;
   const revenueTotalPkr = revenueSubscriptionPkr + revenueLocalPkr;
   /** Dashboard health indicators */
   res.json({
@@ -114,6 +122,7 @@ const dashboard = asyncHandler(async (req, res) => {
       revenueTotalPkr,
       revenueSubscriptionPkr,
       revenueLocalPkr,
+      marketplaceVolumePkr,
       // Legacy aliases (all PKR — do not mix currencies)
       revenueTotal: revenueTotalPkr,
       revenueSubscriptionUsd: revenueSubscriptionPkr,
@@ -449,6 +458,7 @@ const reportsSummary = asyncHandler(async (req, res) => {
     {
       $match: {
         status: 'completed',
+        type: { $in: ['subscription', 'ground_booking'] },
         $nor: [{ type: 'ground_booking', payee: { $exists: true, $ne: null } }],
       },
     },
@@ -465,7 +475,11 @@ const reportsSummary = asyncHandler(async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="platform-revenue-report.pdf"');
     const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
-    doc.fontSize(18).text('Sports Ecosystem — Payment summary (PKR)', { align: 'center' });
+    doc.fontSize(18).text('Sports Ecosystem — Platform revenue (PKR)', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10).text('Subscriptions + admin-owned ground bookings only (excludes seller product/coach fees).', {
+      align: 'center',
+    });
     doc.moveDown();
     doc.fontSize(10).text(`Generated: ${new Date().toISOString()}`, { align: 'center' });
     doc.moveDown();

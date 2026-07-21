@@ -28,6 +28,7 @@ const { finalizeGroundBookingConfirm, finalizeProductOrder } = require('../utils
 const { parsePagination, paginationMeta } = require('../utils/pagination');
 const { enrichOrderItemsWithImages } = require('../utils/productImages');
 const { streamVerificationDocumentFile } = require('../utils/streamVerificationDocument');
+const { haversineKm, parseCoord } = require('../utils/geo');
 const { buildMeetingInstructions } = require('../utils/trainingRequestMessages');
 const { getBusinessOwnerPaymentAccount } = require('../utils/ownerPaymentAccount');
 const {
@@ -183,34 +184,64 @@ function scoredToRecommendationRows(scored, limit) {
     matchScore: s.matchScore,
     breakdown: s.breakdown,
     reasons: s.reasons,
+    distanceKm: s.distanceKm ?? null,
   }));
 }
 
-function scoreLocation(playerCity, coachProfile) {
+function scoreLocation(playerProfile, coachProfile) {
+  const playerCity = playerProfile?.city;
+  const distanceKm = haversineKm(
+    playerProfile?.latitude,
+    playerProfile?.longitude,
+    coachProfile?.latitude,
+    coachProfile?.longitude
+  );
   const coachCity = coachProfile?.city;
   const academy = String(coachProfile?.academyLocation || '').trim();
+  const academyName = String(coachProfile?.academyName || '').trim();
+
+  if (distanceKm != null) {
+    let score = 0.2;
+    if (distanceKm <= 2) score = 1;
+    else if (distanceKm <= 10) score = 0.8;
+    else if (distanceKm <= 25) score = 0.5;
+    else if (distanceKm <= 50) score = 0.3;
+    const distLabel = distanceKm < 10 ? `${distanceKm.toFixed(1)} km` : `${Math.round(distanceKm)} km`;
+    return {
+      score,
+      distanceKm,
+      detail: academy || academyName
+        ? `${distLabel} away — ${academyName || academy}.`
+        : `${distLabel} away.`,
+    };
+  }
+
   const p = String(playerCity || '').trim().toLowerCase();
   const c = String(coachCity || '').trim().toLowerCase();
   if (!p || !c) {
     return {
       score: 0.45,
+      distanceKm: null,
       detail: academy ? `Academy: ${academy}.` : 'Location partially available.',
     };
   }
   if (p === c) {
     return {
       score: 1,
+      distanceKm: null,
       detail: academy ? `Same city — ${academy}.` : `Same city — ${coachCity}.`,
     };
   }
   if (p.includes(c) || c.includes(p)) {
     return {
       score: 0.75,
+      distanceKm: null,
       detail: academy ? `Near city — ${academy}.` : 'Near city match.',
     };
   }
   return {
     score: 0.25,
+    distanceKm: null,
     detail: academy ? `Different city — academy in ${coachCity}: ${academy}.` : `Different city — ${coachCity}.`,
   };
 }
@@ -342,9 +373,21 @@ const getProfile = asyncHandler(async (req, res) => {
 const updateProfile = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
-  const allowed = ['fullName', 'phone', 'sportPreference', 'skillLevel', 'city', 'address', 'playerCategory'];
+  const allowed = ['fullName', 'phone', 'sportPreference', 'skillLevel', 'city', 'address', 'playerCategory', 'latitude', 'longitude'];
   const patch = {};
   for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+  if (req.body.latitude !== undefined) {
+    const lat = parseCoord(req.body.latitude);
+    if (req.body.latitude === null || req.body.latitude === '') patch.latitude = undefined;
+    else if (lat === undefined) return res.status(400).json({ success: false, message: 'Invalid latitude.' });
+    else patch.latitude = lat;
+  }
+  if (req.body.longitude !== undefined) {
+    const lng = parseCoord(req.body.longitude);
+    if (req.body.longitude === null || req.body.longitude === '') patch.longitude = undefined;
+    else if (lng === undefined) return res.status(400).json({ success: false, message: 'Invalid longitude.' });
+    else patch.longitude = lng;
+  }
   if (req.body.trainingPreferences !== undefined) {
     const check = validateScheduleSlots(req.body.trainingPreferences);
     if (!check.ok) return res.status(400).json({ success: false, message: check.message });
@@ -431,7 +474,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
       const skill = scoreSkill(c.coachProfile, p.sportPreference, p.skillLevel || 'beginner');
       const category = scoreCategoryFit(c.coachProfile, p.sportPreference, p.playerCategory);
       const time = scoreTimeOverlap(playerTimeSlots, c.coachProfile.availability);
-      const location = scoreLocation(p.city, c.coachProfile);
+      const location = scoreLocation(p, c.coachProfile);
       const performance = scorePerformanceFit(playerSignal, c.coachProfile);
 
       const finalScore =
@@ -464,6 +507,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
         breakdown,
         reasons: buildMatchReasons(breakdown, factorDetails),
         matchingDays: time.matchingDays ?? 0,
+        distanceKm: location.distanceKm ?? null,
       };
     })
     .sort((a, b) => b.matchScore - a.matchScore)
@@ -537,6 +581,7 @@ const getRecommendations = asyncHandler(async (req, res) => {
             matchScore: base.matchScore,
             breakdown: base.breakdown,
             reasons: base.reasons,
+            distanceKm: base.distanceKm ?? null,
           };
         })
         .filter(Boolean)
@@ -654,7 +699,7 @@ const streamCoachCertificateFile = asyncHandler(async (req, res) => {
 });
 
 const COACH_PUBLIC_PROFILE_SELECT =
-  'fullName profilePhotoUrl academyImageUrls phone specialties preferredPlayerLevels coachingCategories academyLocation city bio yearsExperience availability averageRating ratingCount locationMapUrl monthlyTrainingFee updatedAt';
+  'fullName profilePhotoUrl academyImageUrls academyName phone specialties preferredPlayerLevels coachingCategories academyLocation city latitude longitude bio yearsExperience availability averageRating ratingCount locationMapUrl monthlyTrainingFee updatedAt';
 
 const getCoachPublicProfile = asyncHandler(async (req, res) => {
   const coach = await findVerifiedCoachForPlayer(req.params.coachId);
@@ -1102,7 +1147,9 @@ const getBusinessStore = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Store not found' });
   }
   const store = await BusinessProfile.findOne({ user: ownerId })
-    .select('storeName storeDescription storeLogoUrl storeBannerUrl businessName shippingPolicyText returnPolicyText')
+    .select(
+      'storeName storeDescription storeLogoUrl storeBannerUrl shopImageUrls businessName shippingPolicyText returnPolicyText'
+    )
     .lean();
   if (!store) return res.status(404).json({ success: false, message: 'Store not found' });
   const products = await Product.find({ businessOwner: ownerId, isActive: true }).sort({ createdAt: -1 }).lean();
@@ -1121,6 +1168,7 @@ const getBusinessStore = asyncHandler(async (req, res) => {
         storeDescription: store.storeDescription || '',
         storeLogoUrl: store.storeLogoUrl,
         storeBannerUrl: store.storeBannerUrl,
+        shopImageUrls: Array.isArray(store.shopImageUrls) ? store.shopImageUrls : [],
         shippingPolicyText: store.shippingPolicyText,
         returnPolicyText: store.returnPolicyText,
       },

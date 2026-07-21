@@ -87,6 +87,9 @@ export default function CoachProfileDetailModal({
             <CoachAvatar profile={p} name={p.fullName} size="xl" />
             <div>
               <h2 className="font-display text-2xl tracking-wide text-white">{p.fullName || 'Coach'}</h2>
+              {p.academyName ? (
+                <p className="mt-1 text-sm font-medium text-player-green">{p.academyName}</p>
+              ) : null}
               <p className="mt-1 text-sm capitalize text-player-on-variant">
                 {(p.specialties || []).join(' · ') || '—'}
               </p>

@@ -77,10 +77,10 @@ function PerformanceStrip({ performance }) {
 
 export default function PlayerTrainingRequestCard({
   request,
-  coachOrigin,
   scheduledAt,
   onScheduledAtChange,
   meetingLocation,
+  meetingLocationPlaceholder,
   onMeetingLocationChange,
   rollNo,
   onRollNoChange,
@@ -131,7 +131,7 @@ export default function PlayerTrainingRequestCard({
               {request.status}
             </span>
           </div>
-          <PlayerLocationLines profile={profile} coachOrigin={coachOrigin} className="mt-3" />
+          <PlayerLocationLines profile={profile} className="mt-3" />
         </div>
       </div>
 
@@ -284,7 +284,7 @@ export default function PlayerTrainingRequestCard({
             <input
               type="text"
               className="mt-1 w-full rounded-lg border border-white/10 bg-player-bg px-3 py-2 text-sm text-white"
-              placeholder={coachOrigin || 'Academy address or map link'}
+              placeholder={meetingLocationPlaceholder || 'Academy address'}
               value={meetingLocation || ''}
               onChange={(e) => onMeetingLocationChange?.(e.target.value)}
             />

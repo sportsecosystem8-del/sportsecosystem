@@ -1,10 +1,11 @@
 import PlayerIcon from './player/PlayerIcon';
 import { playerDirectionsUrl, playerLocationLabel, playerMapSearchUrl } from '../utils/playerProfile';
 
-export default function PlayerLocationLines({ profile, coachOrigin, className = '' }) {
+export default function PlayerLocationLines({ profile, className = '' }) {
   const label = playerLocationLabel(profile);
   const mapUrl = playerMapSearchUrl(profile);
-  const directionsUrl = playerDirectionsUrl(profile, coachOrigin);
+  // Directions to the player only — no coach origin (avoids opening coach map pin).
+  const directionsUrl = playerDirectionsUrl(profile);
 
   return (
     <div className={`space-y-1 text-xs text-slate-400 ${className}`}>
@@ -31,7 +32,7 @@ export default function PlayerLocationLines({ profile, coachOrigin, className = 
               rel="noreferrer"
               className="font-medium text-player-green underline-offset-2 hover:underline"
             >
-              Get directions{coachOrigin ? ' & distance' : ''}
+              Get directions
             </a>
           ) : null}
         </p>

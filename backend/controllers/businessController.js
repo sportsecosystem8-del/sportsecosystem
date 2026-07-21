@@ -300,6 +300,35 @@ const removeStoreBanner = asyncHandler(async (req, res) => {
   res.json({ success: true, data: bp });
 });
 
+const uploadShopPhoto = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No image received. Choose JPG/PNG/WebP under 8 MB.' });
+  }
+  const url = `/uploads/${req.file.filename}`;
+  const profile = await BusinessProfile.findOne({ user: req.user.id });
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  const urls = Array.isArray(profile.shopImageUrls) ? [...profile.shopImageUrls] : [];
+  if (urls.length >= 12) {
+    return res.status(400).json({ success: false, message: 'Maximum 12 shop photos allowed.' });
+  }
+  urls.push(url);
+  profile.shopImageUrls = urls;
+  await profile.save();
+  res.json({ success: true, data: profile });
+});
+
+const removeShopPhoto = asyncHandler(async (req, res) => {
+  const url = String(req.body?.url || '').trim();
+  if (!url) return res.status(400).json({ success: false, message: 'url is required' });
+  const profile = await BusinessProfile.findOneAndUpdate(
+    { user: req.user.id },
+    { $pull: { shopImageUrls: url } },
+    { new: true }
+  );
+  if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  res.json({ success: true, data: profile });
+});
+
 /** Change subscription tier with downgrade guard */
 const changeSubscription = asyncHandler(async (req, res) => {
   const { package: pkg, paymentIntentId } = req.body;
@@ -755,6 +784,8 @@ module.exports = {
   uploadStoreBanner,
   removeStoreLogo,
   removeStoreBanner,
+  uploadShopPhoto,
+  removeShopPhoto,
   listMyProducts,
   addProduct,
   updateProduct,

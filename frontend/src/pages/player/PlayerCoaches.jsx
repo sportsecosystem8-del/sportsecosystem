@@ -16,7 +16,6 @@ import { api, getErrorMessage } from '../../services/api';
 export default function PlayerCoaches() {
   const [list, setList] = useState([]);
   const [trainingRequests, setTrainingRequests] = useState([]);
-  const [generationMethod, setGenerationMethod] = useState('ai');
   const [requestingCoachId, setRequestingCoachId] = useState(null);
   const [requestNote, setRequestNote] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
@@ -89,7 +88,14 @@ export default function PlayerCoaches() {
       return { label: 'Request pending', disabled: true, hint: 'Waiting for coach to accept.' };
     }
     if (tr.status === 'accepted') {
-      return { label: 'Training active', disabled: true, hint: 'This coach will train you.' };
+      if (tr.feesClearedAt || tr.feesCleared) {
+        return { label: 'Training active', disabled: true, hint: 'This coach will train you.' };
+      }
+      return {
+        label: 'Accepted — fees pending',
+        disabled: true,
+        hint: 'Coach accepted. Training starts after fees are cleared.',
+      };
     }
     if (tr.status === 'rejected') {
       return { label: 'Request again', disabled: false, hint: 'Previous request was declined.' };
@@ -123,7 +129,6 @@ export default function PlayerCoaches() {
       ]);
       const rows = rec.data.data || [];
       setList(rows);
-      setGenerationMethod(rec.data.generationMethod || 'ai');
       setTrainingRequests(tr.data.data || []);
       setPlayerOrigin(playerLocationOrigin(profileRes.data?.data));
       setPlayerSport(profileRes.data?.data?.sportPreference || '');
@@ -171,14 +176,6 @@ export default function PlayerCoaches() {
           {sportFilterBadge(playerSport)}
         </p>
       ) : null}
-      <p className="mb-3 text-xs uppercase tracking-[0.16em] text-player-on-variant/70">
-        Source:{' '}
-        {generationMethod === 'ai'
-          ? 'AI matched to your profile'
-          : generationMethod === 'baseline'
-            ? 'Matched by profile scores'
-            : 'Recommendations'}
-      </p>
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
       {infoMsg ? <p className="mb-4 text-sm text-player-on-variant">{infoMsg}</p> : null}
       {statusMsg ? <p className="mb-4 text-sm text-player-green">{statusMsg}</p> : null}
@@ -221,6 +218,9 @@ export default function PlayerCoaches() {
                 </span>
                 <p className="text-lg font-bold text-white underline-offset-2 hover:underline">{row.profile?.fullName}</p>
               </div>
+              {row.profile?.academyName ? (
+                <p className="mt-0.5 text-sm font-medium text-player-green">{row.profile.academyName}</p>
+              ) : null}
               <p className="mt-0.5 text-[10px] uppercase tracking-wider text-player-green">Tap for full profile & reviews</p>
               <p className="mt-1 text-sm text-player-on-variant">{row.profile?.specialties?.join(', ') || '—'}</p>
               {row.profile?.averageRating > 0 ? (
@@ -231,6 +231,13 @@ export default function PlayerCoaches() {
               {row.profile?.monthlyTrainingFee > 0 ? (
                 <p className="mt-1 text-sm font-semibold text-player-green">
                   PKR {row.profile.monthlyTrainingFee}/month
+                </p>
+              ) : null}
+              {row.distanceKm != null ? (
+                <p className="mt-1 text-xs text-slate-300">
+                  {row.distanceKm < 10
+                    ? `${Number(row.distanceKm).toFixed(1)} km away`
+                    : `${Math.round(row.distanceKm)} km away`}
                 </p>
               ) : null}
               <CoachLocationLines profile={row.profile} playerOrigin={playerOrigin} className="mt-2" />

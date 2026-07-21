@@ -14,6 +14,9 @@ const playerProfileSchema = new mongoose.Schema(
     trainingPreferences: [scheduleSlotSchema],
     city: String,
     address: String,
+    /** Optional live / map pin for nearest-coach matching */
+    latitude: { type: Number, min: -90, max: 90 },
+    longitude: { type: Number, min: -180, max: 180 },
     /** Public player headshot — JPG/PNG via POST /players/me/profile-photo */
     profilePhotoUrl: String,
   },

@@ -1,12 +1,15 @@
 import { isMapUrl } from './groundImages';
 
 export function coachAcademyLabel(profile) {
+  const name = String(profile?.academyName || '').trim();
   const academy = String(profile?.academyLocation || '').trim();
   const city = String(profile?.city || '').trim();
-  if (academy && city && !academy.toLowerCase().includes(city.toLowerCase())) {
-    return `${academy}, ${city}`;
-  }
-  return academy || city || '';
+  const location =
+    academy && city && !academy.toLowerCase().includes(city.toLowerCase())
+      ? `${academy}, ${city}`
+      : academy || city || '';
+  if (name && location) return `${name} · ${location}`;
+  return name || location || '';
 }
 
 export function coachMapUrl(profile) {

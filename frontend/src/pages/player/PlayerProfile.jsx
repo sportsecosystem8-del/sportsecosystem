@@ -22,6 +22,9 @@ export default function PlayerProfile() {
   const [playerCategory, setPlayerCategory] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
+  const [latitude, setLatitude] = useState(null);
+  const [longitude, setLongitude] = useState(null);
+  const [geoBusy, setGeoBusy] = useState(false);
   const [trainingPreferences, setTrainingPreferences] = useState([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -45,7 +48,9 @@ export default function PlayerProfile() {
         const p = profRes.data.data;
         setProfile(p);
         setEnrollments(
-          (trRes.data.data || []).filter((r) => r.status === 'accepted' && r.coachRollNo),
+          (trRes.data.data || []).filter(
+            (r) => r.status === 'accepted' && (r.feesClearedAt || r.feesCleared) && r.coachRollNo,
+          ),
         );
         setFullName(p.fullName || '');
         setPhone(p.phone || '');
@@ -54,6 +59,8 @@ export default function PlayerProfile() {
         setPlayerCategory(p.playerCategory || '');
         setCity(p.city || '');
         setAddress(p.address || '');
+        setLatitude(p.latitude ?? null);
+        setLongitude(p.longitude ?? null);
         setTrainingPreferences(Array.isArray(p.trainingPreferences) ? p.trainingPreferences : []);
       } catch (e) {
         if (!cancelled) setErr(getErrorMessage(e));
@@ -77,6 +84,8 @@ export default function PlayerProfile() {
         skillLevel,
         city: city || undefined,
         address: address || undefined,
+        latitude: latitude != null ? latitude : null,
+        longitude: longitude != null ? longitude : null,
         trainingPreferences,
       };
       if (sportPreference === 'cricket') {
@@ -318,11 +327,11 @@ export default function PlayerProfile() {
               <label className={labelCls()} htmlFor="pf-city">
                 City
               </label>
-              <input id="pf-city" value={city} onChange={(e) => setCity(e.target.value)} className={playerProfileInput} />
+              <input id="pf-city" value={city} onChange={(e) => setCity(e.target.value)} className={playerProfileInput} required />
             </div>
             <div>
               <label className={labelCls()} htmlFor="pf-address">
-                Address
+                Full address
               </label>
               <textarea
                 id="pf-address"
@@ -330,7 +339,45 @@ export default function PlayerProfile() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className={playerProfileInput}
+                placeholder="Street, area, landmark"
+                required
               />
+            </div>
+            <div>
+              <p className={labelCls()}>Live location (for nearest coaches)</p>
+              <p className="mt-1 text-xs text-player-on-variant">
+                {latitude != null && longitude != null
+                  ? `Saved pin: ${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`
+                  : 'No map pin yet — coaches are matched by city until you add one.'}
+              </p>
+              <button
+                type="button"
+                disabled={geoBusy}
+                className="mt-2 rounded-lg border border-player-green/40 px-3 py-2 text-xs font-bold uppercase tracking-wider text-player-green hover:bg-player-green/10 disabled:opacity-50"
+                onClick={() => {
+                  if (!navigator.geolocation) {
+                    setErr('Geolocation is not supported in this browser.');
+                    return;
+                  }
+                  setGeoBusy(true);
+                  setErr('');
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setLatitude(pos.coords.latitude);
+                      setLongitude(pos.coords.longitude);
+                      setGeoBusy(false);
+                      setMsg('Location captured — save profile to keep it.');
+                    },
+                    () => {
+                      setGeoBusy(false);
+                      setErr('Could not read your location. Allow location access and try again.');
+                    },
+                    { enableHighAccuracy: true, timeout: 15000 }
+                  );
+                }}
+              >
+                {geoBusy ? 'Locating…' : 'Use my location'}
+              </button>
             </div>
           </div>
         </PlayerCard>

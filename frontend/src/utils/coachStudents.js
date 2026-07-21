@@ -1,11 +1,21 @@
 import { resolveUserRefId } from './objectId';
 
-/** Accepted training-request players for coach dropdowns (plans, evaluations). */
+/** True when training is fully active (accepted + fees cleared). */
+export function isActiveTrainingRequest(tr) {
+  return tr?.status === 'accepted' && Boolean(tr.feesClearedAt || tr.feesCleared);
+}
+
+/** Active (fees-cleared) training-request players for coach dropdowns (plans, evaluations). */
 export function studentsFromAcceptedRequests(requests) {
+  return studentsFromActiveTraining(requests);
+}
+
+/** Active training-request players for coach dropdowns (plans, evaluations, payments). */
+export function studentsFromActiveTraining(requests) {
   const seen = new Set();
   const list = [];
   for (const tr of requests) {
-    if (tr.status !== 'accepted') continue;
+    if (!isActiveTrainingRequest(tr)) continue;
     const playerId = resolveUserRefId(tr.player);
     if (!playerId || seen.has(playerId)) continue;
     seen.add(playerId);

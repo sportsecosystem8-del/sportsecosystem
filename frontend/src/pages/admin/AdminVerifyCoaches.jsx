@@ -5,11 +5,69 @@ import AdminVerificationDocumentList from '../../components/admin/AdminVerificat
 import { adminBtnCompactGhost, adminBtnCompactPrimary } from '../../components/admin/adminClassNames';
 import CoachAvatar from '../../components/CoachAvatar';
 import { api, getErrorMessage } from '../../services/api';
+import { publicAssetUrl } from '../../utils/assetUrl';
+
+function CoachFullProfile({ profile }) {
+  if (!profile) return null;
+  const photos = Array.isArray(profile.academyImageUrls) ? profile.academyImageUrls : [];
+  return (
+    <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+      <p className="font-headline text-xs font-bold uppercase tracking-wider text-admin-cyan">Full coach profile</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {profile.academyName ? (
+          <p className="font-label text-xs text-slate-300">
+            <span className="text-slate-500">Academy: </span>
+            {profile.academyName}
+          </p>
+        ) : null}
+        {profile.bio ? (
+          <p className="font-label text-xs text-slate-300 sm:col-span-2">
+            <span className="text-slate-500">Bio: </span>
+            {profile.bio}
+          </p>
+        ) : null}
+        {profile.monthlyTrainingFee > 0 ? (
+          <p className="font-label text-xs text-slate-300">
+            <span className="text-slate-500">Monthly fee: </span>
+            PKR {profile.monthlyTrainingFee}
+          </p>
+        ) : null}
+        {profile.preferredPlayerLevels?.length ? (
+          <p className="font-label text-xs text-slate-300">
+            <span className="text-slate-500">Preferred levels: </span>
+            {profile.preferredPlayerLevels.join(', ')}
+          </p>
+        ) : null}
+        {profile.coachingCategories?.length ? (
+          <p className="font-label text-xs text-slate-300">
+            <span className="text-slate-500">Categories: </span>
+            {profile.coachingCategories.join(', ')}
+          </p>
+        ) : null}
+      </div>
+      {photos.length ? (
+        <div>
+          <p className="mb-2 font-label text-xs text-slate-500">Academy photos</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            {photos.map((url) => (
+              <a key={url} href={publicAssetUrl(url)} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-white/10">
+                <img src={publicAssetUrl(url)} alt="Academy" className="h-28 w-full object-cover" />
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="font-label text-xs text-slate-500">No academy photos uploaded.</p>
+      )}
+    </div>
+  );
+}
 
 export default function AdminVerifyCoaches() {
   const [list, setList] = useState([]);
   const [err, setErr] = useState('');
   const [banner, setBanner] = useState('');
+  const [expanded, setExpanded] = useState({});
   const load = () =>
     api
       .get('/admin/verification/coaches')
@@ -45,7 +103,7 @@ export default function AdminVerifyCoaches() {
     <div>
       <AdminPageHeader
         title="Coach verification"
-        subtitle="Review uploaded documents, then approve or reject the coach application."
+        subtitle="Review full profile, academy photos, and documents — then approve or reject."
       />
       {banner ? (
         <AdminCard accent="cyan" className="mb-6 p-4">
@@ -65,6 +123,9 @@ export default function AdminVerifyCoaches() {
                 <CoachAvatar profile={u.coachProfile} size="md" />
                 <div>
                   <p className="text-base font-bold text-white">{u.coachProfile?.fullName || '—'}</p>
+                  {u.coachProfile?.academyName ? (
+                    <p className="mt-0.5 font-label text-sm text-admin-cyan">{u.coachProfile.academyName}</p>
+                  ) : null}
                   <p className="mt-1 font-label text-sm text-slate-400">{u.email}</p>
                   {u.coachProfile?.phone ? (
                     <p className="mt-1 font-label text-xs text-slate-400">Phone: {u.coachProfile.phone}</p>
@@ -104,6 +165,13 @@ export default function AdminVerifyCoaches() {
                     )}
                   </p>
                   <p className="mt-2 font-label text-xs text-slate-500">Status: {u.verificationStatus}</p>
+                  <button
+                    type="button"
+                    className="mt-2 font-label text-xs font-semibold text-admin-cyan underline-offset-2 hover:underline"
+                    onClick={() => setExpanded((prev) => ({ ...prev, [u._id]: !prev[u._id] }))}
+                  >
+                    {expanded[u._id] ? 'Hide full profile' : 'View full profile'}
+                  </button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -118,6 +186,7 @@ export default function AdminVerifyCoaches() {
                 </button>
               </div>
             </div>
+            {expanded[u._id] ? <CoachFullProfile profile={u.coachProfile} /> : null}
             <AdminVerificationDocumentList documents={u.verificationDocuments} onChanged={load} />
           </AdminCard>
         ))}

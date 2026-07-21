@@ -1,13 +1,13 @@
-# Render Blueprint — backend API only (frontend deploys separately on Vercel).
-# Dashboard: New → Blueprint → connect this repo, or create a Web Service with Root Directory = backend.
+# Render Blueprint — full stack: API + Vite SPA (frontend/dist served by Express in production).
+# Dashboard: New → Blueprint → connect this repo.
+# Set CLIENT_URL and APP_BASE_URL to this service's public URL (same origin).
 services:
   - type: web
-    name: sports-ecosystem-api
+    name: sports-ecosystem
     runtime: node
-    rootDir: backend
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: npm install && npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend
+    startCommand: npm start --prefix backend
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

@@ -8,17 +8,29 @@ export function playerLocationLabel(profile) {
 }
 
 export function playerMapSearchUrl(profile) {
+  const lat = Number(profile?.latitude);
+  const lng = Number(profile?.longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
   const label = playerLocationLabel(profile);
   if (!label) return null;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`;
 }
 
 export function playerDirectionsUrl(profile, origin) {
-  const destination = playerLocationLabel(profile);
+  const lat = Number(profile?.latitude);
+  const lng = Number(profile?.longitude);
+  const destination =
+    Number.isFinite(lat) && Number.isFinite(lng)
+      ? `${lat},${lng}`
+      : playerLocationLabel(profile);
   if (!destination) return null;
+  // Destination is always the player. Omit origin so Maps can use the device location
+  // (do not pass coach map URLs — they make Maps open the coach pin instead).
   const params = new URLSearchParams({ destination });
   const from = String(origin || '').trim();
-  if (from) params.set('origin', from);
+  if (from && !/^https?:\/\//i.test(from)) params.set('origin', from);
   params.set('travelmode', 'driving');
   return `https://www.google.com/maps/dir/?api=1&${params.toString()}`;
 }

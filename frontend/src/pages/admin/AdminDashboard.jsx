@@ -193,21 +193,32 @@ export default function AdminDashboard() {
             <StatCard label="Total coaches" value={d.users?.coaches} accent="gold" icon="sports_soccer" />
             <StatCard label="Business owners" value={d.users?.businesses} accent="orange" icon="storefront" />
             <StatCard
-              label="Total revenue (PKR)"
+              label="Platform revenue (PKR)"
               value={fmtPkr(d.revenueTotalPkr ?? d.revenueTotal)}
               accent="cyan"
               icon="payments"
             />
           </div>
 
-          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             <StatCard
               label="Subscription revenue (PKR)"
               value={fmtPkr(d.revenueSubscriptionPkr ?? d.revenueSubscriptionUsd)}
               accent="gold"
               icon="subscriptions"
             />
-            <StatCard label="Ground & shop revenue (PKR)" value={fmtPkr(d.revenueLocalPkr)} accent="gold" icon="stadium" />
+            <StatCard
+              label="Admin ground bookings (PKR)"
+              value={fmtPkr(d.revenueLocalPkr)}
+              accent="gold"
+              icon="stadium"
+            />
+            <StatCard
+              label="Marketplace volume (PKR)"
+              value={fmtPkr(d.marketplaceVolumePkr)}
+              accent="orange"
+              icon="storefront"
+            />
           </div>
 
           {d.health ? (

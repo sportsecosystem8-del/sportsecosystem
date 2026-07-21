@@ -129,6 +129,18 @@ export default function PlayerStore() {
       {store?.storeBannerUrl ? (
         <img src={publicAssetUrl(store.storeBannerUrl)} alt="" className="mb-6 h-40 w-full rounded-xl object-cover" />
       ) : null}
+      {store?.shopImageUrls?.length ? (
+        <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+          {store.shopImageUrls.map((url) => (
+            <img
+              key={url}
+              src={publicAssetUrl(url)}
+              alt=""
+              className="h-28 w-full rounded-lg object-cover"
+            />
+          ))}
+        </div>
+      ) : null}
       {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
       {ok ? <p className="mb-4 text-sm text-player-green">{ok}</p> : null}
 

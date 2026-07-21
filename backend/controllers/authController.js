@@ -187,6 +187,7 @@ const register = asyncHandler(async (req, res) => {
       specialties: normalizeSports(profile.specialties || []),
       preferredPlayerLevels: normalizeSkillLevels(profile.preferredPlayerLevels || []),
       academyLocation: profile.academyLocation,
+      academyName: profile.academyName ? String(profile.academyName).trim() : undefined,
       city: profile.city,
       bio: profile.bio,
       yearsExperience: profile.yearsExperience || 0,

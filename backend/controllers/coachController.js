@@ -137,6 +137,22 @@ async function assertAcceptedStudent(coachId, playerId) {
   return accepted;
 }
 
+/** Roster / fee ledger: accepted + fees cleared only. */
+async function assertActiveStudent(coachId, playerId) {
+  const active = await TrainingRequest.findOne({
+    coach: coachId,
+    player: playerId,
+    status: 'accepted',
+    feesClearedAt: { $ne: null },
+  }).lean();
+  if (!active) {
+    const err = new Error('This player is not an active student yet (accept and clear fees first).');
+    err.statusCode = 403;
+    throw err;
+  }
+  return active;
+}
+
 async function assertFeesCleared(coachId, playerId) {
   const tr = await TrainingRequest.findOne({
     coach: coachId,
@@ -400,7 +416,7 @@ const populatePlayerBrief = {
   select: 'email',
   populate: {
     path: 'playerProfile',
-    select: 'fullName phone city address sportPreference skillLevel playerCategory profilePhotoUrl',
+    select: 'fullName phone city address latitude longitude sportPreference skillLevel playerCategory profilePhotoUrl',
   },
 };
 
@@ -552,6 +568,9 @@ const updateProfile = asyncHandler(async (req, res) => {
     'bio',
     'city',
     'academyLocation',
+    'academyName',
+    'latitude',
+    'longitude',
     'yearsExperience',
     'maxStudents',
     'specialties',
@@ -604,6 +623,24 @@ const updateProfile = asyncHandler(async (req, res) => {
   if (req.body.monthlyTrainingFee !== undefined) {
     const fee = Number(req.body.monthlyTrainingFee);
     patch.monthlyTrainingFee = Number.isFinite(fee) && fee >= 0 ? fee : 0;
+  }
+  if (req.body.latitude !== undefined) {
+    const { parseCoord } = require('../utils/geo');
+    if (req.body.latitude === null || req.body.latitude === '') patch.latitude = undefined;
+    else {
+      const lat = parseCoord(req.body.latitude);
+      if (lat === undefined) return res.status(400).json({ success: false, message: 'Invalid latitude.' });
+      patch.latitude = lat;
+    }
+  }
+  if (req.body.longitude !== undefined) {
+    const { parseCoord } = require('../utils/geo');
+    if (req.body.longitude === null || req.body.longitude === '') patch.longitude = undefined;
+    else {
+      const lng = parseCoord(req.body.longitude);
+      if (lng === undefined) return res.status(400).json({ success: false, message: 'Invalid longitude.' });
+      patch.longitude = lng;
+    }
   }
   if (req.body.academyImageUrls !== undefined) {
     if (!Array.isArray(req.body.academyImageUrls)) {
@@ -772,7 +809,10 @@ const updateTrainingRequest = asyncHandler(async (req, res) => {
     tr.meetingLocation =
       (meetingLocation && String(meetingLocation).trim()) || cp?.academyLocation || cp?.city || '';
     tr.meetingAcademyName =
-      (meetingAcademyName && String(meetingAcademyName).trim()) || cp?.fullName || '';
+      (meetingAcademyName && String(meetingAcademyName).trim()) ||
+      cp?.academyName ||
+      cp?.fullName ||
+      '';
     await tr.save();
 
     const meetingInstructions = buildMeetingInstructions(tr, cp);
@@ -1608,7 +1648,7 @@ const listStudentFees = asyncHandler(async (req, res) => {
 const upsertStudentFee = asyncHandler(async (req, res) => {
   const { playerId, joiningDate, monthlyFee, notes, status, studentName } = req.body;
   if (!playerId) return res.status(400).json({ success: false, message: 'playerId is required.' });
-  await assertAcceptedStudent(req.user.id, playerId);
+  await assertActiveStudent(req.user.id, playerId);
 
   const player = await User.findById(playerId).populate('playerProfile').lean();
   const name =
@@ -1710,6 +1750,7 @@ const getDashboard = asyncHandler(async (req, res) => {
     performances,
     acceptedRequests,
     upcomingByPlayer,
+    feeLedgerRows,
   ] = await Promise.all([
     TrainingRequest.countDocuments({ coach: coachId, status: 'pending' }),
     coachAvailableBalance(coachId),
@@ -1725,7 +1766,11 @@ const getDashboard = asyncHandler(async (req, res) => {
     }).lean(),
     AttendanceRecord.find({ coach: coachId }).select('session present').lean(),
     PerformanceEvaluation.find({ coach: coachId }).sort({ weekStartDate: -1 }).lean(),
-    TrainingRequest.find({ coach: coachId, status: 'accepted' })
+    TrainingRequest.find({
+      coach: coachId,
+      status: 'accepted',
+      feesClearedAt: { $ne: null },
+    })
       .populate(populatePlayerBrief)
       .sort({ updatedAt: -1 })
       .lean(),
@@ -1737,7 +1782,12 @@ const getDashboard = asyncHandler(async (req, res) => {
       .select('player scheduledAt')
       .sort({ scheduledAt: 1 })
       .lean(),
+    StudentFeeRecord.find({ coach: coachId, status: 'active' }).select('monthlyFee').lean(),
   ]);
+
+  const feesLedgerTotal = feeLedgerRows.reduce((s, r) => s + (Number(r.monthlyFee) || 0), 0);
+  const paymentsReceived = balance.gross;
+  const totalReceived = paymentsReceived + feesLedgerTotal;
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const weeklyChart = [];
@@ -1817,7 +1867,10 @@ const getDashboard = asyncHandler(async (req, res) => {
       pendingRequests,
       activeStudents: myStudents.length,
       myStudents,
-      totalReceived: balance.gross,
+      currency: 'PKR',
+      paymentsReceived,
+      feesLedgerTotal,
+      totalReceived,
       availableBalance: balance.available,
       sessionReadiness,
       weeklyVolume: sessionsLast7.length,
