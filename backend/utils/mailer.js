@@ -51,7 +51,7 @@ function isMailerConfigured() {
   return isBrevoConfigured() || isResendConfigured() || isSmtpConfigured();
 }
 
-async function sendViaBrevo({ to, subject, html, text }) {
+async function sendViaBrevo({ to, subject, html, text, headers = {} }) {
   const fromRaw = process.env.SMTP_FROM || 'sportsecosystem8@gmail.com';
   // Parse "Display Name <email@example.com>" or just "email@example.com"
   const match = fromRaw.match(/^(.*?)\s*<([^>]+)>$/);
@@ -65,6 +65,7 @@ async function sendViaBrevo({ to, subject, html, text }) {
     htmlContent: html || `<p>${text}</p>`,
     headers: {
       'X-Mailin-Track': '0',
+      ...headers,
     },
   };
   if (text) body.textContent = text;
@@ -93,7 +94,7 @@ async function sendViaBrevo({ to, subject, html, text }) {
 /**
  * Send via Resend HTTP API — clean links, no sendibt redirects.
  */
-async function sendViaResend({ to, subject, html, text }) {
+async function sendViaResend({ to, subject, html, text, headers = {} }) {
   const { Resend } = require('resend');
   const resend = new Resend(process.env.RESEND_API_KEY.trim());
   let from = process.env.SMTP_FROM || 'Sports Ecosystem <onboarding@resend.dev>';
@@ -101,7 +102,7 @@ async function sendViaResend({ to, subject, html, text }) {
     from = 'Sports Ecosystem <onboarding@resend.dev>';
   }
 
-  const { data, error } = await resend.emails.send({ from, to, subject, html, text });
+  const { data, error } = await resend.emails.send({ from, to, subject, html, text, headers });
   if (error) {
     throw new Error(`Resend error: ${error.message || JSON.stringify(error)}`);
   }
@@ -143,7 +144,7 @@ function isConnectFailureRetryableWithSslFallback(err) {
   return ['ETIMEDOUT', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH'].includes(code);
 }
 
-async function sendViaSmtp({ to, subject, html, text }) {
+async function sendViaSmtp({ to, subject, html, text, headers = {} }) {
   const cfg = getMailerConfig();
   if (!cfg.host || !cfg.user || !cfg.pass || !cfg.from) {
     throw new Error('SMTP is not fully configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM.');
@@ -151,7 +152,7 @@ async function sendViaSmtp({ to, subject, html, text }) {
 
   const primary = await buildSmtpTransportOptions(cfg, { implicitSsl: false });
   const transport1 = nodemailer.createTransport(primary);
-  const payload = { from: cfg.from, to, subject, html, text };
+  const payload = { from: cfg.from, to, subject, html, text, headers };
 
   try {
     return await transport1.sendMail(payload);
@@ -181,10 +182,10 @@ async function sendViaSmtp({ to, subject, html, text }) {
 /**
  * Main sendMail — priority: Resend → Brevo → SMTP (nodemailer).
  */
-async function sendMail({ to, subject, html, text }) {
+async function sendMail({ to, subject, html, text, headers }) {
   if (isResendConfigured()) {
     try {
-      const res = await sendViaResend({ to, subject, html, text });
+      const res = await sendViaResend({ to, subject, html, text, headers });
       console.log(`[mailer][resend] Email sent to ${to}:`, res);
       return res;
     } catch (err) {
@@ -192,9 +193,9 @@ async function sendMail({ to, subject, html, text }) {
     }
   }
   if (isBrevoConfigured()) {
-    return sendViaBrevo({ to, subject, html, text });
+    return sendViaBrevo({ to, subject, html, text, headers });
   }
-  return sendViaSmtp({ to, subject, html, text });
+  return sendViaSmtp({ to, subject, html, text, headers });
 }
 
 module.exports = { sendMail, isMailerConfigured };
