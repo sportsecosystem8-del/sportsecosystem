@@ -3,8 +3,11 @@ import axios from 'axios';
 function getBaseURL() {
   const raw = import.meta.env.VITE_API_URL;
   if (!raw || typeof raw !== 'string') return '/api';
-  const trimmed = raw.trim().replace(/\/+$/, '');
+  let trimmed = raw.trim().replace(/\/+$/, '');
   if (!trimmed) return '/api';
+  if (trimmed.startsWith('http://') && trimmed.includes('onrender.com')) {
+    trimmed = trimmed.replace('http://', 'https://');
+  }
   if (trimmed.endsWith('/api')) return trimmed;
   return `${trimmed}/api`;
 }
