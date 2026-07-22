@@ -11,11 +11,6 @@ if (typeof dns.setDefaultResultOrder === 'function') {
 const CONNECTION_TIMEOUT_MS = Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 20_000);
 const GREETING_TIMEOUT_MS = Number(process.env.SMTP_GREETING_TIMEOUT_MS || 12_000);
 
-/**
- * If true (default) and the primary connect uses 587/STARTTLS, a failed connect
- * (e.g. ETIMEDOUT) is retried once on port 465 with implicit SSL — some networks
- * allow one but not the other.
- */
 function trySslPortFallback() {
   const v = String(process.env.SMTP_TRY_SSL_PORT_FALLBACK ?? 'true').toLowerCase();
   if (v === '0' || v === 'false' || v === 'no') return false;
@@ -37,6 +32,34 @@ function getMailerConfig() {
     pass: process.env.SMTP_PASS,
     from: process.env.SMTP_FROM,
   };
+}
+
+function isResendConfigured() {
+  return Boolean(process.env.RESEND_API_KEY && process.env.SMTP_FROM);
+}
+
+function isSmtpConfigured() {
+  const cfg = getMailerConfig();
+  return Boolean(cfg.host && cfg.user && cfg.pass && cfg.from);
+}
+
+function isMailerConfigured() {
+  return isResendConfigured() || isSmtpConfigured();
+}
+
+/**
+ * Send via Resend HTTP API — works on Render free tier (no SMTP port needed).
+ */
+async function sendViaResend({ to, subject, html, text }) {
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const from = process.env.SMTP_FROM || 'Sports Ecosystem <onboarding@resend.dev>';
+
+  const { data, error } = await resend.emails.send({ from, to, subject, html, text });
+  if (error) {
+    throw new Error(`Resend error: ${error.message || JSON.stringify(error)}`);
+  }
+  return data;
 }
 
 /**
@@ -87,14 +110,11 @@ function isConnectFailureRetryableWithSslFallback(err) {
   );
 }
 
-/**
- * @param {object} options - nodemailer transport options
- */
 function createTransportForOptions(options) {
   return nodemailer.createTransport(options);
 }
 
-async function sendMail({ to, subject, html, text }) {
+async function sendViaSmtp({ to, subject, html, text }) {
   const cfg = getMailerConfig();
   if (!cfg.host || !cfg.user || !cfg.pass || !cfg.from) {
     throw new Error('SMTP is not fully configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM.');
@@ -102,7 +122,6 @@ async function sendMail({ to, subject, html, text }) {
 
   const primary = await buildSmtpTransportOptions(cfg, { implicitSsl: false });
   const transport1 = createTransportForOptions(primary);
-
   const payload = { from: cfg.from, to, subject, html, text };
 
   try {
@@ -132,9 +151,14 @@ async function sendMail({ to, subject, html, text }) {
   }
 }
 
-function isMailerConfigured() {
-  const cfg = getMailerConfig();
-  return Boolean(cfg.host && cfg.user && cfg.pass && cfg.from);
+/**
+ * Main sendMail — uses Resend if RESEND_API_KEY is set, otherwise falls back to SMTP.
+ */
+async function sendMail({ to, subject, html, text }) {
+  if (isResendConfigured()) {
+    return sendViaResend({ to, subject, html, text });
+  }
+  return sendViaSmtp({ to, subject, html, text });
 }
 
 module.exports = { sendMail, isMailerConfigured };
