@@ -94,15 +94,79 @@ function createTransportForOptions(options) {
   return nodemailer.createTransport(options);
 }
 
+async function sendMailViaBrevo({ to, subject, html, text }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const fromEmail = process.env.SMTP_USER || 'sepoffical2@gmail.com';
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'api-key': apiKey,
+    },
+    body: JSON.stringify({
+      sender: { email: fromEmail, name: 'Sports Ecosystem' },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Brevo HTTP API error (${res.status}): ${errText}`);
+  }
+  return await res.json();
+}
+
+async function sendMailViaResend({ to, subject, html, text }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Sports Ecosystem <onboarding@resend.dev>',
+      to: [to],
+      subject,
+      html,
+      text,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Resend HTTP API error (${res.status}): ${errText}`);
+  }
+  return await res.json();
+}
+
 async function sendMail({ to, subject, html, text }) {
+  // Prefer HTTP API in cloud production environments like Render to avoid SMTP port 587 timeouts
+  if (process.env.BREVO_API_KEY) {
+    try {
+      return await sendMailViaBrevo({ to, subject, html, text });
+    } catch (e) {
+      console.warn('[mailer] Brevo HTTP API failed, falling back:', e.message);
+    }
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    try {
+      return await sendMailViaResend({ to, subject, html, text });
+    } catch (e) {
+      console.warn('[mailer] Resend HTTP API failed, falling back:', e.message);
+    }
+  }
+
   const cfg = getMailerConfig();
   if (!cfg.host || !cfg.user || !cfg.pass || !cfg.from) {
-    throw new Error('SMTP is not fully configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM.');
+    throw new Error('SMTP is not fully configured and no HTTP email API keys (BREVO_API_KEY/RESEND_API_KEY) are set.');
   }
 
   const primary = await buildSmtpTransportOptions(cfg, { implicitSsl: false });
   const transport1 = createTransportForOptions(primary);
-
   const payload = { from: cfg.from, to, subject, html, text };
 
   try {
@@ -133,6 +197,7 @@ async function sendMail({ to, subject, html, text }) {
 }
 
 function isMailerConfigured() {
+  if (process.env.BREVO_API_KEY || process.env.RESEND_API_KEY) return true;
   const cfg = getMailerConfig();
   return Boolean(cfg.host && cfg.user && cfg.pass && cfg.from);
 }
