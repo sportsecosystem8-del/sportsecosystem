@@ -91,12 +91,15 @@ async function sendViaBrevo({ to, subject, html, text }) {
 }
 
 /**
- * Send via Resend HTTP API — works on Render free tier (no SMTP port needed).
+ * Send via Resend HTTP API — clean links, no sendibt redirects.
  */
 async function sendViaResend({ to, subject, html, text }) {
   const { Resend } = require('resend');
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = process.env.SMTP_FROM || 'onboarding@resend.dev';
+  const resend = new Resend(process.env.RESEND_API_KEY.trim());
+  let from = process.env.SMTP_FROM || 'Sports Ecosystem <onboarding@resend.dev>';
+  if (from.includes('@gmail.com')) {
+    from = 'Sports Ecosystem <onboarding@resend.dev>';
+  }
 
   const { data, error } = await resend.emails.send({ from, to, subject, html, text });
   if (error) {
@@ -176,14 +179,20 @@ async function sendViaSmtp({ to, subject, html, text }) {
 }
 
 /**
- * Main sendMail — priority: Brevo → Resend → SMTP (nodemailer).
+ * Main sendMail — priority: Resend → Brevo → SMTP (nodemailer).
  */
 async function sendMail({ to, subject, html, text }) {
+  if (isResendConfigured()) {
+    try {
+      const res = await sendViaResend({ to, subject, html, text });
+      console.log(`[mailer][resend] Email sent to ${to}:`, res);
+      return res;
+    } catch (err) {
+      console.warn('[mailer][resend] Failed, falling back to Brevo/SMTP:', err.message);
+    }
+  }
   if (isBrevoConfigured()) {
     return sendViaBrevo({ to, subject, html, text });
-  }
-  if (isResendConfigured()) {
-    return sendViaResend({ to, subject, html, text });
   }
   return sendViaSmtp({ to, subject, html, text });
 }
