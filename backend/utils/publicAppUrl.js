@@ -16,7 +16,12 @@ function normalizePublicBaseUrl(url) {
       value = `https://${value}`;
     }
   }
-  return value;
+  try {
+    const parsed = new URL(value);
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
 }
 
 function getConfiguredPublicBaseUrl() {

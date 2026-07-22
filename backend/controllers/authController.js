@@ -49,11 +49,19 @@ function frontendBaseUrl() {
 }
 
 function buildDirectLink(baseUrl, path, params) {
-  const url = new URL(`${baseUrl}${path}`);
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value != null && value !== '') url.searchParams.set(key, String(value));
-  });
-  return url.toString();
+  const base = String(baseUrl || '').trim();
+  if (!base) {
+    return `${path}`;
+  }
+  try {
+    const url = new URL(`${base}${path}`);
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value != null && value !== '') url.searchParams.set(key, String(value));
+    });
+    return url.toString();
+  } catch {
+    return `${base}${path}`;
+  }
 }
 
 async function sendVerificationEmail(user, rawToken) {
