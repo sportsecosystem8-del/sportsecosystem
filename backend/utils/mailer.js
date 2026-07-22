@@ -63,6 +63,9 @@ async function sendViaBrevo({ to, subject, html, text }) {
     to: [{ email: to }],
     subject: subject,
     htmlContent: html || `<p>${text}</p>`,
+    headers: {
+      'X-Mailin-Track': '0',
+    },
   };
   if (text) body.textContent = text;
 
