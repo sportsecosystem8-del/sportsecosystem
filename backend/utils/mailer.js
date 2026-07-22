@@ -35,8 +35,20 @@ function getMailerConfig() {
     secure: String(process.env.SMTP_SECURE || 'false') === 'true',
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_FROM,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
   };
+}
+
+function parseEmailAddress(value) {
+  if (!value || typeof value !== 'string') return '';
+  const match = /<([^>]+)>/.exec(value);
+  return match ? match[1].trim() : value.trim();
+}
+
+function parseEmailName(value) {
+  if (!value || typeof value !== 'string') return 'Sports Ecosystem';
+  const match = /^\s*([^<]+?)\s*</.exec(value);
+  return match ? match[1].trim() : 'Sports Ecosystem';
 }
 
 /**
@@ -96,7 +108,9 @@ function createTransportForOptions(options) {
 
 async function sendMailViaBrevo({ to, subject, html, text }) {
   const apiKey = process.env.BREVO_API_KEY;
-  const fromEmail = process.env.SMTP_USER || 'sepoffical2@gmail.com';
+  const fromEmailRaw = process.env.BREVO_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@sports-ecosystem.local';
+  const fromEmail = parseEmailAddress(fromEmailRaw);
+  const fromName = parseEmailName(fromEmailRaw);
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -105,7 +119,7 @@ async function sendMailViaBrevo({ to, subject, html, text }) {
       'api-key': apiKey,
     },
     body: JSON.stringify({
-      sender: { email: fromEmail, name: 'Sports Ecosystem' },
+      sender: { email: fromEmail, name: fromName },
       to: [{ email: to }],
       subject,
       htmlContent: html,
@@ -121,6 +135,7 @@ async function sendMailViaBrevo({ to, subject, html, text }) {
 
 async function sendMailViaResend({ to, subject, html, text }) {
   const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.RESEND_FROM || process.env.SMTP_FROM || 'Sports Ecosystem <onboarding@resend.dev>';
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -128,7 +143,7 @@ async function sendMailViaResend({ to, subject, html, text }) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Sports Ecosystem <onboarding@resend.dev>',
+      from: fromAddress,
       to: [to],
       subject,
       html,
@@ -143,6 +158,13 @@ async function sendMailViaResend({ to, subject, html, text }) {
 }
 
 async function sendMail({ to, subject, html, text }) {
+  const provider = process.env.BREVO_API_KEY
+    ? 'brevo'
+    : process.env.RESEND_API_KEY
+      ? 'resend'
+      : 'smtp';
+  console.log(`[mailer] sendMail to=${to} provider=${provider} subject=${subject}`);
+
   // Prefer HTTP API in cloud production environments like Render to avoid SMTP port 587 timeouts
   if (process.env.BREVO_API_KEY) {
     try {
@@ -160,6 +182,8 @@ async function sendMail({ to, subject, html, text }) {
     }
   }
 
+
+
   const cfg = getMailerConfig();
   if (!cfg.host || !cfg.user || !cfg.pass || !cfg.from) {
     throw new Error('SMTP is not fully configured and no HTTP email API keys (BREVO_API_KEY/RESEND_API_KEY) are set.');
@@ -172,6 +196,8 @@ async function sendMail({ to, subject, html, text }) {
   try {
     return await transport1.sendMail(payload);
   } catch (err) {
+    console.error('[mailer] SMTP primary send failed', err?.stack || err?.message || err);
+
     const canFallback =
       trySslPortFallback() &&
       !cfg.secure &&
