@@ -60,6 +60,14 @@ if (isProduction) {
     console.warn(
       '[spa] frontend/dist missing — API-only mode. Run `npm run build` from repo root (or deploy SPA separately on Vercel).'
     );
+    app.get('/', (req, res) => {
+      res.json({
+        success: true,
+        message: 'Sports Ecosystem API is online',
+        health: '/api/health',
+        documentation: 'API endpoints are under /api. Deploy frontend on Vercel.'
+      });
+    });
   }
 }
 
