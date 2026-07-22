@@ -3,10 +3,8 @@ dist/
 .env
 .env.local
 backend/.env
-frontend/.env
-backend/env
-frontend/env
 backend/render.env
+frontend/.env
 backend/uploads/
 *.log
 .DS_Store

@@ -2,13 +2,8 @@
   "name": "sports-ecosystem-platform",
   "private": true,
   "description": "FYP26-CS-G22 — run scripts from repo root or from backend/frontend",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm run backend\" \"npm run frontend\"",
-    "postinstall": "npm install --prefix frontend && npm install --prefix backend",
     "seed:admin": "npm run seed:admin --prefix backend",
     "seed:admin:reset": "npm run seed:admin:reset --prefix backend",
     "wipe:db": "npm run wipe:database --prefix backend",

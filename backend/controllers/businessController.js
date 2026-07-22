@@ -264,7 +264,7 @@ const uploadStoreLogo = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No image received. Choose JPG/PNG/WebP under 8 MB.' });
   }
-  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, { storeLogoUrl: url }, { new: true });
   if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
   res.json({ success: true, data: bp });
@@ -274,7 +274,7 @@ const uploadStoreBanner = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No image received. Choose JPG/PNG/WebP under 8 MB.' });
   }
-  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   const bp = await BusinessProfile.findOneAndUpdate({ user: req.user.id }, { storeBannerUrl: url }, { new: true });
   if (!bp) return res.status(404).json({ success: false, message: 'Profile not found' });
   res.json({ success: true, data: bp });
@@ -304,7 +304,7 @@ const uploadShopPhoto = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No image received. Choose JPG/PNG/WebP under 8 MB.' });
   }
-  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   const profile = await BusinessProfile.findOne({ user: req.user.id });
   if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
   const urls = Array.isArray(profile.shopImageUrls) ? [...profile.shopImageUrls] : [];
@@ -502,7 +502,7 @@ const patchStock = asyncHandler(async (req, res) => {
 
 const addProductImage = asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'Image required' });
-  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   const p = await Product.findOneAndUpdate(
     { _id: req.params.id, businessOwner: req.user.id },
     { $push: { images: url } },
@@ -664,7 +664,7 @@ const uploadBusinessDoc = asyncHandler(async (req, res) => {
   const doc = await VerificationDocument.create({
     user: req.user.id,
     roleContext: 'business_owner',
-    filePath: req.file.cloudinaryUrl || `/uploads/${req.file.filename}`,
+    filePath: `/uploads/${req.file.filename}`,
     originalName: req.file.originalname,
     docType: req.body.docType,
     issueDate: req.body.issueDate ? new Date(req.body.issueDate) : undefined,

@@ -48,42 +48,41 @@ function frontendBaseUrl() {
   return getPublicAppUrlForEmailLinks();
 }
 
-function buildDirectLink(baseUrl, path, params) {
-  const base = String(baseUrl || '').trim();
-  if (!base) {
-    return `${path}`;
-  }
-  try {
-    const url = new URL(`${base}${path}`);
-    Object.entries(params || {}).forEach(([key, value]) => {
-      if (value != null && value !== '') url.searchParams.set(key, String(value));
-    });
-    return url.toString();
-  } catch {
-    return `${base}${path}`;
-  }
-}
-
 async function sendVerificationEmail(user, rawToken) {
-  const verifyUrl = buildDirectLink(frontendBaseUrl(), '/verify-email', {
-    email: user.email,
-    token: rawToken,
-  });
+  const verifyUrl = `${frontendBaseUrl()}/verify-email?email=${encodeURIComponent(user.email)}&token=${rawToken}`;
   const subject = 'Verify your Sports Ecosystem account';
-  const text = `Welcome! Verify your email by opening this link: ${verifyUrl}`;
-  const html = `<p>Welcome to Sports Ecosystem.</p><p>Please verify your email by clicking <a href="${verifyUrl}" target="_blank" rel="noopener noreferrer">this link</a>.</p><p>Or copy and paste this direct link into your browser:</p><p style="word-break: break-all;"><a href="${verifyUrl}" target="_blank" rel="noopener noreferrer">${verifyUrl}</a></p>`;
-  await sendMail({ to: user.email, subject, text, html, headers: { 'X-Mailin-Track': '0' } });
+  const text = `Welcome to Sports Ecosystem!\n\nPlease verify your email by opening the link below in your browser:\n${verifyUrl}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h2 style="color: #0d9488;">Welcome to Sports Ecosystem</h2>
+      <p>Please verify your email address to complete your registration.</p>
+      <p style="margin: 25px 0;">
+        <a href="${verifyUrl}" style="background-color: #0d9488; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Verify Email Address</a>
+      </p>
+      <p style="color: #666; font-size: 14px;">If the button above doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; font-size: 14px;"><a href="${verifyUrl}" style="color: #0d9488;">${verifyUrl}</a></p>
+    </div>
+  `;
+  await sendMail({ to: user.email, subject, text, html });
 }
 
 async function sendPasswordResetEmail(user, rawToken) {
-  const resetUrl = buildDirectLink(frontendBaseUrl(), '/reset-password', {
-    email: user.email,
-    token: rawToken,
-  });
+  const resetUrl = `${frontendBaseUrl()}/reset-password?email=${encodeURIComponent(user.email)}&token=${rawToken}`;
   const subject = 'Reset your Sports Ecosystem password';
-  const text = `Reset your password by opening this link: ${resetUrl}`;
-  const html = `<p>We received a password reset request.</p><p>Reset your password by clicking <a href="${resetUrl}" target="_blank" rel="noopener noreferrer">this link</a>.</p><p>Or copy and paste this direct link into your browser:</p><p style="word-break: break-all;"><a href="${resetUrl}" target="_blank" rel="noopener noreferrer">${resetUrl}</a></p><p>This link expires in 15 minutes.</p>`;
-  await sendMail({ to: user.email, subject, text, html, headers: { 'X-Mailin-Track': '0' } });
+  const text = `Reset your password by opening this link in your browser:\n${resetUrl}\n\nThis link expires in 15 minutes.`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h2 style="color: #0d9488;">Reset Your Password</h2>
+      <p>We received a request to reset your password.</p>
+      <p style="margin: 25px 0;">
+        <a href="${resetUrl}" style="background-color: #0d9488; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+      </p>
+      <p style="color: #666; font-size: 14px;">If the button above doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; font-size: 14px;"><a href="${resetUrl}" style="color: #0d9488;">${resetUrl}</a></p>
+      <p style="color: #999; font-size: 12px; margin-top: 20px;">This link will expire in 15 minutes. If you did not request this, please ignore this email.</p>
+    </div>
+  `;
+  await sendMail({ to: user.email, subject, text, html });
 }
 
 const register = asyncHandler(async (req, res) => {

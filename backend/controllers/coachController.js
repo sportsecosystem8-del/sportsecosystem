@@ -663,7 +663,7 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
       message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
     });
   }
-  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   const profile = await CoachProfile.findOneAndUpdate(
     { user: req.user.id },
     { profilePhotoUrl: url },
@@ -690,7 +690,7 @@ const uploadAcademyPhoto = asyncHandler(async (req, res) => {
       message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
     });
   }
-  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   const profile = await CoachProfile.findOne({ user: req.user.id });
   if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
   const urls = Array.isArray(profile.academyImageUrls) ? [...profile.academyImageUrls] : [];
@@ -1697,7 +1697,7 @@ const uploadDocumentMeta = asyncHandler(async (req, res) => {
   const doc = await VerificationDocument.create({
     user: req.user.id,
     roleContext: 'coach',
-    filePath: req.file.cloudinaryUrl || `/uploads/${req.file.filename}`,
+    filePath: `/uploads/${req.file.filename}`,
     originalName: req.file.originalname,
     docType: req.body.docType,
     issueDate: req.body.issueDate ? new Date(req.body.issueDate) : undefined,

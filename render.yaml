@@ -1,12 +1,12 @@
-# Render Blueprint — API-only mode (frontend deployed separately on Vercel).
+# Render Blueprint — full stack: API + Vite SPA (frontend/dist served by Express in production).
 # Dashboard: New → Blueprint → connect this repo.
-# Set CLIENT_URL and APP_BASE_URL to your Vercel frontend URL.
+# Set CLIENT_URL and APP_BASE_URL to this service's public URL (same origin).
 services:
   - type: web
-    name: sports-ecosystem-api
+    name: sports-ecosystem
     runtime: node
     plan: free
-    buildCommand: npm install --prefix backend
+    buildCommand: npm install && npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend
     startCommand: npm start --prefix backend
     healthCheckPath: /api/health
     envVars:
@@ -45,8 +45,6 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: CLOUDINARY_URL
         sync: false
       - key: AI_PROVIDER
         value: groq

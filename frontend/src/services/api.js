@@ -1,18 +1,6 @@
 import axios from 'axios';
 
-function getBaseURL() {
-  const raw = import.meta.env.VITE_API_URL;
-  if (!raw || typeof raw !== 'string') return '/api';
-  let trimmed = raw.trim().replace(/\/+$/, '');
-  if (!trimmed) return '/api';
-  if (trimmed.startsWith('http://') && trimmed.includes('onrender.com')) {
-    trimmed = trimmed.replace('http://', 'https://');
-  }
-  if (trimmed.endsWith('/api')) return trimmed;
-  return `${trimmed}/api`;
-}
-
-const baseURL = getBaseURL();
+const baseURL = import.meta.env.VITE_API_URL || '/api';
 
 export const api = axios.create({
   baseURL,

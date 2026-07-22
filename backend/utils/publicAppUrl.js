@@ -5,65 +5,28 @@ const DEV_FALLBACK_BASE_URL = 'http://localhost:5173';
 
 function normalizePublicBaseUrl(url) {
   if (url == null || String(url).trim() === '') return '';
-  let value = String(url).trim().replace(/\/+$/, '');
-  if (!value) return '';
-  if (!/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value)) {
-    if (value.startsWith('//')) {
-      value = `https:${value}`;
-    } else if (value.includes('localhost') || value.includes('127.0.0.1') || value.startsWith('0.0.0.0')) {
-      value = `http://${value}`;
-    } else {
-      value = `https://${value}`;
-    }
-  }
-  try {
-    const parsed = new URL(value);
-    return parsed.toString().replace(/\/+$/, '');
-  } catch {
-    return '';
-  }
-}
-
-function getConfiguredPublicBaseUrl() {
-  const candidates = [
-    process.env.APP_BASE_URL,
-    process.env.CLIENT_URL,
-    process.env.FRONTEND_URL,
-    process.env.PUBLIC_URL,
-    process.env.VERCEL_URL,
-    process.env.RENDER_EXTERNAL_URL,
-    process.env.VITE_APP_URL,
-  ];
-  for (const raw of candidates) {
-    if (raw == null || String(raw).trim() === '') continue;
-    const firstCandidate = String(raw)
-      .split(',')
-      .map((value) => normalizePublicBaseUrl(value))
-      .find(Boolean);
-    if (firstCandidate) return firstCandidate;
-  }
-  return '';
+  return String(url).trim().replace(/\/+$/, '');
 }
 
 function isProductionNodeEnv() {
   return process.env.NODE_ENV === 'production';
 }
 
-/** True when any public frontend URL is configured for email links. */
+/** True when APP_BASE_URL is set to a non-empty value (after trim). */
 function isPublicAppUrlSet() {
-  return getConfiguredPublicBaseUrl() !== '';
+  return normalizePublicBaseUrl(process.env.APP_BASE_URL) !== '';
 }
 
 /**
  * Base URL for links in outgoing email (verify email, password reset).
- * Production prefers APP_BASE_URL, but will fall back to CLIENT_URL or similar frontend values.
+ * Production requires APP_BASE_URL; non-production falls back to localhost Vite.
  */
 function getPublicAppUrlForEmailLinks() {
-  const explicit = getConfiguredPublicBaseUrl();
+  const explicit = normalizePublicBaseUrl(process.env.APP_BASE_URL);
   if (explicit) return explicit;
   if (isProductionNodeEnv()) {
     throw new Error(
-      'A public frontend URL must be set in APP_BASE_URL or CLIENT_URL in production (e.g. https://app.example.com)'
+      'APP_BASE_URL must be set to your public frontend URL in production (e.g. https://app.example.com)'
     );
   }
   return normalizePublicBaseUrl(DEV_FALLBACK_BASE_URL);
@@ -75,18 +38,18 @@ function isEmailLinkEnvHealthy() {
 }
 
 function logPublicAppUrlStartupChecks() {
-  const explicit = getConfiguredPublicBaseUrl();
+  const explicit = normalizePublicBaseUrl(process.env.APP_BASE_URL);
   if (!explicit) {
     console.warn(
-      `[env] No public frontend URL is configured. Email links will use the development fallback (${DEV_FALLBACK_BASE_URL}). Set APP_BASE_URL or CLIENT_URL for staging/production.`
+      `[env] APP_BASE_URL is not set. Email links will use the development fallback (${DEV_FALLBACK_BASE_URL}). Set APP_BASE_URL for staging/production.`
     );
     if (isProductionNodeEnv()) {
       console.error(
-        '[env] A public frontend URL is required in production. Verification and password-reset links will throw until it is set.'
+        '[env] APP_BASE_URL is required in production. Verification and password-reset links will throw until it is set.'
       );
     }
   } else {
-    console.log(`[env] publicFrontendUrl=${explicit}`);
+    console.log(`[env] APP_BASE_URL=${explicit}`);
   }
 
   const clientUrl = process.env.CLIENT_URL;

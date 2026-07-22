@@ -17,25 +17,14 @@ if (process.env.TRUST_PROXY === 'true' || isProduction) {
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman)
-      if (!origin) return callback(null, true);
-      
-      const cleanOrigin = origin.replace(/\/+$/, '');
-      const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.trim().replace(/\/+$/, '') : null;
-      
-      if (!clientUrl || clientUrl === '*' || cleanOrigin === clientUrl || cleanOrigin.endsWith('.vercel.app')) {
-        return callback(null, true);
+    origin: (() => {
+      if (process.env.CLIENT_URL) return process.env.CLIENT_URL;
+      if (isProduction) {
+        console.warn('[cors] CLIENT_URL is unset in production — allowing all origins. Set CLIENT_URL to your frontend URL.');
+        return true;
       }
-      
-      // Fallback allow if configured in CLIENT_URL list
-      const allowedList = clientUrl.split(',').map(u => u.trim());
-      if (allowedList.includes(cleanOrigin)) {
-        return callback(null, true);
-      }
-      
-      return callback(null, true); // Permissive CORS for split deploy
-    },
+      return true;
+    })(),
     credentials: true,
   })
 );
@@ -71,14 +60,6 @@ if (isProduction) {
     console.warn(
       '[spa] frontend/dist missing — API-only mode. Run `npm run build` from repo root (or deploy SPA separately on Vercel).'
     );
-    app.get('/', (req, res) => {
-      res.json({
-        success: true,
-        message: 'Sports Ecosystem API is online',
-        health: '/api/health',
-        documentation: 'API endpoints are under /api. Deploy frontend on Vercel.'
-      });
-    });
   }
 }
 
