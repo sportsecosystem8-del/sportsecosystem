@@ -52,7 +52,7 @@ async function sendVerificationEmail(user, rawToken) {
   const verifyUrl = `${frontendBaseUrl()}/verify-email?email=${encodeURIComponent(user.email)}&token=${rawToken}`;
   const subject = 'Verify your Sports Ecosystem account';
   const text = `Welcome! Verify your email by opening this link: ${verifyUrl}`;
-  const html = `<p>Welcome to Sports Ecosystem.</p><p>Please verify your email by clicking <a href="${verifyUrl}">this link</a>.</p>`;
+  const html = `<p>Welcome to Sports Ecosystem.</p><p>Please verify your email by clicking <a href="${verifyUrl}">this link</a>.</p><p>Or copy and paste this direct link into your browser:</p><p style="word-break: break-all;"><a href="${verifyUrl}">${verifyUrl}</a></p>`;
   await sendMail({ to: user.email, subject, text, html });
 }
 
@@ -60,7 +60,7 @@ async function sendPasswordResetEmail(user, rawToken) {
   const resetUrl = `${frontendBaseUrl()}/reset-password?email=${encodeURIComponent(user.email)}&token=${rawToken}`;
   const subject = 'Reset your Sports Ecosystem password';
   const text = `Reset your password by opening this link: ${resetUrl}`;
-  const html = `<p>We received a password reset request.</p><p>Reset your password by clicking <a href="${resetUrl}">this link</a>.</p><p>This link expires in 15 minutes.</p>`;
+  const html = `<p>We received a password reset request.</p><p>Reset your password by clicking <a href="${resetUrl}">this link</a>.</p><p>Or copy and paste this direct link into your browser:</p><p style="word-break: break-all;"><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 15 minutes.</p>`;
   await sendMail({ to: user.email, subject, text, html });
 }
 
