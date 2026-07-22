@@ -17,14 +17,20 @@ if (process.env.TRUST_PROXY === 'true' || isProduction) {
 
 app.use(
   cors({
-    origin: (() => {
-      if (process.env.CLIENT_URL) return process.env.CLIENT_URL;
-      if (isProduction) {
-        console.warn('[cors] CLIENT_URL is unset in production — allowing all origins. Set CLIENT_URL to your frontend URL.');
-        return true;
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const clientUrl = process.env.CLIENT_URL;
+      if (!clientUrl) return callback(null, true);
+      const allowed = clientUrl
+        .split(',')
+        .map((s) => s.trim().replace(/\/+$/, ''))
+        .filter(Boolean);
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (allowed.includes('*') || allowed.includes(cleanOrigin)) {
+        return callback(null, true);
       }
-      return true;
-    })(),
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
