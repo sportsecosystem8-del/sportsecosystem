@@ -51,30 +51,40 @@ function isMailerConfigured() {
   return isBrevoConfigured() || isResendConfigured() || isSmtpConfigured();
 }
 
-/**
- * Send via Brevo HTTP API — works on Render free tier (no SMTP port needed).
- */
 async function sendViaBrevo({ to, subject, html, text }) {
-  const Brevo = require('@getbrevo/brevo');
-  const apiInstance = new Brevo.TransactionalEmailsApi();
-  apiInstance.authentications['apiKey'].apiKey = process.env.BREVO_API_KEY;
-
-  const fromRaw = process.env.SMTP_FROM || 'sepoffical2@gmail.com';
+  const fromRaw = process.env.SMTP_FROM || 'sportsecosystem8@gmail.com';
   // Parse "Display Name <email@example.com>" or just "email@example.com"
   const match = fromRaw.match(/^(.*?)\s*<([^>]+)>$/);
   const senderEmail = match ? match[2].trim() : fromRaw.trim();
   const senderName = match ? match[1].trim() || 'Sports Ecosystem' : 'Sports Ecosystem';
 
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
-  sendSmtpEmail.subject = subject;
-  sendSmtpEmail.htmlContent = html || `<p>${text}</p>`;
-  sendSmtpEmail.textContent = text || '';
-  sendSmtpEmail.sender = { name: senderName, email: senderEmail };
-  sendSmtpEmail.to = [{ email: to }];
+  const body = {
+    sender: { name: senderName, email: senderEmail },
+    to: [{ email: to }],
+    subject: subject,
+    htmlContent: html || `<p>${text}</p>`,
+  };
+  if (text) body.textContent = text;
 
-  const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-  console.log(`[mailer][brevo] Email sent to ${to}: messageId=${result?.body?.messageId || 'ok'}`);
-  return result;
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'content-type': 'application/json',
+      'api-key': process.env.BREVO_API_KEY.trim(),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const resData = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const errMsg = resData.message || resData.code || JSON.stringify(resData);
+    console.error(`[mailer][brevo] Failed (${res.status}):`, errMsg);
+    throw new Error(`Brevo API error (${res.status}): ${errMsg}`);
+  }
+
+  console.log(`[mailer][brevo] Email sent to ${to}: messageId=${resData.messageId || 'ok'}`);
+  return resData;
 }
 
 /**
