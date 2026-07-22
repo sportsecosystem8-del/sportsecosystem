@@ -63,6 +63,20 @@ if (isProduction) {
   }
 }
 
+// Fallback root route when SPA is not mounted
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Sports Ecosystem API is running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      public: '/api/public',
+    },
+  });
+});
+
 app.use(errorHandler);
 
 module.exports = app;
