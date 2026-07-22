@@ -13,6 +13,7 @@
     "@stripe/react-stripe-js": "^3.6.0",
     "@stripe/stripe-js": "^5.5.0",
     "axios": "^1.15.0",
+    "cloudinary": "^2.10.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0"

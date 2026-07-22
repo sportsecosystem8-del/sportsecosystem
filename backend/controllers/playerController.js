@@ -416,7 +416,7 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
       message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
     });
   }
-  const url = `/uploads/${req.file.filename}`;
+  const url = req.file.cloudinaryUrl || `/uploads/${req.file.filename}`;
   const profile = await PlayerProfile.findOneAndUpdate(
     { user: req.user.id },
     { profilePhotoUrl: url },
