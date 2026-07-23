@@ -2,17 +2,43 @@ import { useState } from 'react';
 import { publicAssetUrl } from '../utils/assetUrl';
 import { groundImageList, groundLocationLabel, isMapUrl } from '../utils/groundImages';
 
+function ImageWithRetry({ path, alt = '', className = '', i = 0 }) {
+  const [retries, setRetries] = useState(0);
+  const MAX_RETRIES = 2;
+
+  const handleError = () => {
+    if (retries < MAX_RETRIES) {
+      setRetries((r) => r + 1);
+    }
+  };
+
+  const src = publicAssetUrl(path);
+  const bustedSrc = src + (src.includes('?') ? '&' : '?') + `retry=${retries}`;
+
+  return (
+    <img
+      key={`${path}-${i}-${retries}`}
+      src={bustedSrc}
+      alt={alt}
+      className={className}
+      onError={handleError}
+      loading="lazy"
+    />
+  );
+}
+
 export function GroundPhotoGrid({ ground, className = '' }) {
   const images = groundImageList(ground);
   if (!images.length) return null;
   return (
     <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${className}`}>
       {images.map((path, i) => (
-        <img
+        <ImageWithRetry
           key={`${path}-${i}`}
-          src={publicAssetUrl(path)}
+          path={path}
           alt=""
           className="max-h-48 w-full rounded-xl object-cover"
+          i={i}
         />
       ))}
     </div>
@@ -27,11 +53,12 @@ export function GroundPhotoStrip({ ground, className = '' }) {
   return (
     <div className={`flex gap-1 ${className}`}>
       {images.slice(0, 3).map((path, i) => (
-        <img
+        <ImageWithRetry
           key={`${path}-${i}`}
-          src={publicAssetUrl(path)}
+          path={path}
           alt=""
           className="h-20 flex-1 min-w-0 rounded-lg object-cover"
+          i={i}
         />
       ))}
       {images.length > 3 ? (
@@ -57,7 +84,7 @@ function GroundCardImage({ ground, accent = 'player' }) {
 
   return (
     <div className="relative h-28 w-full shrink-0 overflow-hidden">
-      <img src={publicAssetUrl(images[0])} alt="" className="h-full w-full object-cover" />
+      <ImageWithRetry path={images[0]} alt="" className="h-full w-full object-cover" i={0} />
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
       {images.length > 1 ? (
         <span

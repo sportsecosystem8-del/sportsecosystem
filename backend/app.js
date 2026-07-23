@@ -36,7 +36,19 @@ app.use(
 );
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, 'uploads'), {
+    maxAge: '1d',
+    etag: true,
+    setHeaders: (res, filePath) => {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png') || filePath.endsWith('.gif') || filePath.endsWith('.webp')) {
+        res.setHeader('Content-Type', 'image/auto');
+      }
+    },
+  })
+);
 app.use('/api', apiLimiter, routes);
 
 /** Serve Vite production build (same-origin SPA) when NODE_ENV=production */

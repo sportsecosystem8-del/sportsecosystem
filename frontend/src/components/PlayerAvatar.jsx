@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { publicAssetUrl } from '../utils/assetUrl';
 
 const SIZE_CLASS = {
@@ -20,9 +20,25 @@ function initialsFromName(name) {
 /** Player headshot or initials fallback — pass playerProfile or { profilePhotoUrl, fullName } */
 export default function PlayerAvatar({ profile, name, size = 'md', className = '', cacheBust }) {
   const [imgError, setImgError] = useState(false);
+  const [retries, setRetries] = useState(0);
+  const MAX_RETRIES = 2;
   const photoUrl = profile?.profilePhotoUrl;
   const displayName = name || profile?.fullName || 'Player';
   const sizeCls = SIZE_CLASS[size] || SIZE_CLASS.md;
+
+  useEffect(() => {
+    setImgError(false);
+    setRetries(0);
+  }, [photoUrl, cacheBust]);
+
+  const handleError = () => {
+    if (retries < MAX_RETRIES) {
+      setRetries((r) => r + 1);
+      setImgError(false);
+    } else {
+      setImgError(true);
+    }
+  };
 
   if (photoUrl && !imgError) {
     const src = publicAssetUrl(photoUrl);
@@ -32,13 +48,16 @@ export default function PlayerAvatar({ profile, name, size = 'md', className = '
         : profile?.updatedAt
           ? new Date(profile.updatedAt).getTime()
           : null;
-    const imgSrc = bust ? `${src}${src.includes('?') ? '&' : '?'}v=${bust}` : src;
+    const baseSrc = bust ? `${src}${src.includes('?') ? '&' : '?'}v=${bust}` : src;
+    const imgSrc = baseSrc + (baseSrc.includes('?') ? '&' : '?') + `retry=${retries}`;
     return (
       <img
+        key={`${photoUrl}-${cacheBust}`}
         src={imgSrc}
         alt=""
-        onError={() => setImgError(true)}
+        onError={handleError}
         className={`shrink-0 rounded-full object-cover ${sizeCls} ${className}`}
+        loading="lazy"
       />
     );
   }

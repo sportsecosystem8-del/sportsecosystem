@@ -65,9 +65,11 @@ export default function PlayerShop() {
         setProducts(r.data.data || []);
       })
       .catch((e) => {
-        if (e.name !== 'AbortError') {
-          setErr(getErrorMessage(e));
+        // Ignore abort/cancel errors (normal when filters change)
+        if (e.code === 'ECONNABORTED' || e.name === 'AbortError' || e.message?.includes('canceled')) {
+          return;
         }
+        setErr(getErrorMessage(e));
       });
     return () => abortController.abort();
   }, [baseApi, params]);
