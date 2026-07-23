@@ -21,7 +21,7 @@ export default function PlayerStore() {
   const location = useLocation();
   const isCoach = location.pathname.startsWith('/coach');
   
-  const baseApi = useMemo(() => isCoach ? '/coach' : '/players', [isCoach]);
+  const baseApi = useMemo(() => isCoach ? '/coaches' : '/players', [isCoach]);
   const shopBackPath = useMemo(() => isCoach ? '/coach/shop' : '/player/shop', [isCoach]);
 
   const [store, setStore] = useState(null);

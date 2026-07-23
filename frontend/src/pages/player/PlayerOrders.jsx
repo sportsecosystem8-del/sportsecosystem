@@ -8,7 +8,7 @@ import { api, getErrorMessage } from '../../services/api';
 
 export default function PlayerOrders() {
   const location = useLocation();
-  const endpoint = location.pathname.startsWith('/coach') ? '/coach/orders' : '/players/orders';
+  const endpoint = location.pathname.startsWith('/coach') ? '/coaches/orders' : '/players/orders';
   const [orders, setOrders] = useState([]);
   const [err, setErr] = useState('');
 

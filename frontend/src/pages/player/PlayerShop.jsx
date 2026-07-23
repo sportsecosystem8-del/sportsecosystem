@@ -22,7 +22,7 @@ export default function PlayerShop() {
   const location = useLocation();
   const isCoach = location.pathname.startsWith('/coach');
   
-  const baseApi = useMemo(() => isCoach ? '/coach' : '/players', [isCoach]);
+  const baseApi = useMemo(() => isCoach ? '/coaches' : '/players', [isCoach]);
   const storePrefix = useMemo(() => isCoach ? '/coach/shop/store/' : '/player/shop/store/', [isCoach]);
 
   const [products, setProducts] = useState([]);
@@ -80,7 +80,7 @@ export default function PlayerShop() {
   }, [load]);
 
   useEffect(() => {
-    const profEndpoint = isCoach ? '/coach/me/profile' : '/players/me/profile';
+    const profEndpoint = isCoach ? '/coaches/me/profile' : '/players/me/profile';
     api
       .get(profEndpoint)
       .then((r) => {
