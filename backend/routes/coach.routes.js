@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { body, param } = require('express-validator');
 const c = require('../controllers/coachController');
+const p = require('../controllers/playerController');
 const { authenticate, requireRole, loadUser } = require('../middleware/auth');
 const { requireCoachPlatformSubscription } = require('../middleware/coachPlatformSubscription');
 const { upload, uploadImage } = require('../middleware/upload');
@@ -156,5 +157,11 @@ r.post(
   validateRequest,
   c.requestWithdrawal
 );
+
+r.get('/products', p.browseProducts);
+r.get('/stores/:ownerId', p.getBusinessStore);
+r.post('/orders/easypaisa/initiate', p.initiateOrderEasypaisaPayment);
+r.post('/orders', p.createOrder);
+r.get('/orders', p.listMyOrders);
 
 module.exports = r;

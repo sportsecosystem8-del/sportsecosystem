@@ -31,17 +31,25 @@ function formatDate(value) {
 
 function CustomerDetails({ order }) {
   const player = order.player;
-  const profile = player?.playerProfile;
+  const profile = player?.playerProfile || player?.coachProfile;
   const ship = order.shippingAddress;
+  const roleLabel = player?.role === 'coach' ? 'Coach' : player?.role === 'player' ? 'Player' : null;
 
   const rows = [
     { label: 'Full name', value: profile?.fullName || ship?.fullName },
+    { label: 'Account type', value: roleLabel },
     { label: 'Email', value: player?.email },
     { label: 'Phone', value: profile?.phone || ship?.phone },
-    { label: 'Sport', value: formatLabel(profile?.sportPreference) },
-    { label: 'Skill level', value: formatLabel(profile?.skillLevel) },
+    {
+      label: 'Sport / Specialty',
+      value: formatLabel(profile?.sportPreference || (Array.isArray(profile?.specialties) ? profile.specialties.join(', ') : null)),
+    },
+    {
+      label: 'Skill level / Academy',
+      value: profile?.skillLevel ? formatLabel(profile.skillLevel) : profile?.academyName || null,
+    },
     { label: 'City', value: profile?.city || ship?.city },
-    { label: 'Profile address', value: profile?.address },
+    { label: 'Profile address', value: profile?.address || profile?.academyLocation },
     {
       label: 'Shipping address',
       value: ship?.line1

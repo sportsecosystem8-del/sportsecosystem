@@ -5,7 +5,9 @@ function queueEmail(task) {
   setImmediate(() => {
     Promise.resolve()
       .then(task)
-      .catch((e) => console.error('[mailer][async]', e?.message || e));
+      .catch((e) => {
+        console.error('[mailer][async] email task failed:', e?.stack || e?.message || e);
+      });
   });
 }
 

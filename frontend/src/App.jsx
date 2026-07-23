@@ -94,6 +94,9 @@ export default function App() {
           <Route index element={<CoachDashboard />} />
           <Route path="profile" element={<CoachProfile />} />
           <Route path="subscription" element={<CoachSubscription />} />
+          <Route path="shop" element={<PlayerShop />} />
+          <Route path="shop/store/:ownerId" element={<PlayerStore />} />
+          <Route path="orders" element={<PlayerOrders />} />
           <Route path="requests" element={<CoachRequests />} />
           <Route path="students" element={<CoachStudents />} />
           <Route path="sessions" element={<CoachSessions />} />

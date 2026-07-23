@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import EasypaisaPaySection from '../../components/payment/EasypaisaPaySection';
@@ -18,6 +18,12 @@ const SHIPPING_FIELDS = [
 
 export default function PlayerStore() {
   const { ownerId } = useParams();
+  const location = useLocation();
+  const isCoach = location.pathname.startsWith('/coach');
+  
+  const baseApi = useMemo(() => isCoach ? '/coach' : '/players', [isCoach]);
+  const shopBackPath = useMemo(() => isCoach ? '/coach/shop' : '/player/shop', [isCoach]);
+
   const [store, setStore] = useState(null);
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
@@ -32,14 +38,21 @@ export default function PlayerStore() {
   const [payErr, setPayErr] = useState('');
 
   useEffect(() => {
+    const abortController = new AbortController();
+    setErr('');
     api
-      .get(`/players/stores/${ownerId}`)
+      .get(`${baseApi}/stores/${ownerId}`, { signal: abortController.signal })
       .then((r) => {
         setStore(r.data?.data?.store || null);
         setProducts(r.data?.data?.products || []);
       })
-      .catch((e) => setErr(getErrorMessage(e)));
-  }, [ownerId]);
+      .catch((e) => {
+        if (e.name !== 'AbortError') {
+          setErr(getErrorMessage(e));
+        }
+      });
+    return () => abortController.abort();
+  }, [ownerId, baseApi]);
 
   const cartItems = () =>
     Object.entries(cart)
@@ -78,7 +91,7 @@ export default function PlayerStore() {
     setPayLoading(true);
     setPayErr('');
     api
-      .post('/players/orders/easypaisa/initiate', { items })
+      .post(`${baseApi}/orders/easypaisa/initiate`, { items })
       .then((r) => {
         const session = r.data?.data || null;
         setPaySession(session);
@@ -91,7 +104,7 @@ export default function PlayerStore() {
         setErr(msg);
       })
       .finally(() => setPayLoading(false));
-  }, [showCheckout, cart, ship, shippingValid]);
+  }, [showCheckout, cart, ship, shippingValid, baseApi]);
 
   const placePaidOrder = async (paymentPayload) => {
     const items = cartItems();
@@ -99,7 +112,7 @@ export default function PlayerStore() {
     setPlacing(true);
     setErr('');
     try {
-      await api.post('/players/orders', {
+      await api.post(`${baseApi}/orders`, {
         items,
         paymentMethod: 'easypaisa',
         shippingAddress: ship,
@@ -122,7 +135,7 @@ export default function PlayerStore() {
 
   return (
     <div>
-      <Link to="/player/shop" className="text-sm text-slate-400 underline">
+      <Link to={shopBackPath} className="text-sm text-slate-400 underline">
         ← All equipment
       </Link>
       <PlayerPageHeader title={storeName} subtitle={store?.storeDescription || 'Browse this store’s products'} />

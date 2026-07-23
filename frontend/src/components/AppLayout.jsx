@@ -12,6 +12,8 @@ const nav = {
     { to: '/coach', end: true, label: 'Dashboard' },
     { to: '/coach/profile', label: 'Profile' },
     { to: '/coach/subscription', label: 'Subscription' },
+    { to: '/coach/shop', label: 'Shop' },
+    { to: '/coach/orders', label: 'My Orders' },
     { to: '/coach/requests', label: 'Requests' },
     { to: '/coach/students', label: 'My students' },
     { to: '/coach/sessions', label: 'Sessions' },
@@ -76,29 +78,33 @@ export default function AppLayout() {
               ? 'account_circle'
               : item.label === 'Subscription'
                 ? 'subscriptions'
-                : item.label === 'Requests'
-                  ? 'pending_actions'
-                  : item.label === 'My students'
-                    ? 'groups'
-                    : item.label === 'Sessions'
-                      ? 'calendar_month'
-                      : item.label === 'Attendance'
-                        ? 'fact_check'
-                        : item.label === 'Weekly plans'
-                          ? 'fitness_center'
-                          : item.label === 'Grounds'
-                            ? 'location_city'
-                            : item.label === 'Evaluations'
-                              ? 'analytics'
-                              : item.label === 'Feedback'
-                                ? 'strategy'
-                                : item.label === 'Fees record'
-                                  ? 'receipt_long'
-                                  : item.label === 'Notifications'
-                                    ? 'notifications'
-                                    : item.label === 'Documents'
-                                      ? 'folder'
-                                      : 'verified'}
+                : item.label === 'Shop'
+                  ? 'shopping_bag'
+                  : item.label === 'My Orders'
+                    ? 'receipt_long'
+                    : item.label === 'Requests'
+                      ? 'pending_actions'
+                      : item.label === 'My students'
+                        ? 'groups'
+                        : item.label === 'Sessions'
+                          ? 'calendar_month'
+                          : item.label === 'Attendance'
+                            ? 'fact_check'
+                            : item.label === 'Weekly plans'
+                              ? 'fitness_center'
+                              : item.label === 'Grounds'
+                                ? 'location_city'
+                                : item.label === 'Evaluations'
+                                  ? 'analytics'
+                                  : item.label === 'Feedback'
+                                    ? 'strategy'
+                                    : item.label === 'Fees record'
+                                      ? 'receipt_long'
+                                      : item.label === 'Notifications'
+                                        ? 'notifications'
+                                        : item.label === 'Documents'
+                                          ? 'folder'
+                                          : 'verified'}
         </span>
         <span>{item.label}</span>
       </NavLink>

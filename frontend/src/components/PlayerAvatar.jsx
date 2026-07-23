@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { publicAssetUrl } from '../utils/assetUrl';
 
 const SIZE_CLASS = {
@@ -18,11 +19,12 @@ function initialsFromName(name) {
 
 /** Player headshot or initials fallback — pass playerProfile or { profilePhotoUrl, fullName } */
 export default function PlayerAvatar({ profile, name, size = 'md', className = '', cacheBust }) {
+  const [imgError, setImgError] = useState(false);
   const photoUrl = profile?.profilePhotoUrl;
   const displayName = name || profile?.fullName || 'Player';
   const sizeCls = SIZE_CLASS[size] || SIZE_CLASS.md;
 
-  if (photoUrl) {
+  if (photoUrl && !imgError) {
     const src = publicAssetUrl(photoUrl);
     const bust =
       cacheBust != null
@@ -35,6 +37,7 @@ export default function PlayerAvatar({ profile, name, size = 'md', className = '
       <img
         src={imgSrc}
         alt=""
+        onError={() => setImgError(true)}
         className={`shrink-0 rounded-full object-cover ${sizeCls} ${className}`}
       />
     );

@@ -5,7 +5,7 @@ const { authenticate, requireRole, loadUser } = require('../middleware/auth');
 const { uploadImage } = require('../middleware/upload');
 
 const r = Router();
-r.use(authenticate, loadUser, requireRole('player'));
+r.use(authenticate, loadUser, requireRole('player', 'coach'));
 
 r.get('/me/profile', p.getProfile);
 r.put(

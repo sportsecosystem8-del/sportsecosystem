@@ -410,13 +410,18 @@ const updateProfile = asyncHandler(async (req, res) => {
 });
 
 const uploadProfilePhoto = asyncHandler(async (req, res) => {
-  if (!req.file) {
+  let url = '';
+  if (req.file) {
+    url = `/uploads/${req.file.filename}`;
+  } else if (req.body.profilePhotoUrl && typeof req.body.profilePhotoUrl === 'string') {
+    url = req.body.profilePhotoUrl.trim();
+  }
+  if (!url) {
     return res.status(400).json({
       success: false,
       message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
     });
   }
-  const url = `/uploads/${req.file.filename}`;
   const profile = await PlayerProfile.findOneAndUpdate(
     { user: req.user.id },
     { profilePhotoUrl: url },
@@ -1100,7 +1105,7 @@ const browseProducts = asyncHandler(async (req, res) => {
   if (req.query.sport) {
     const s = String(req.query.sport).toLowerCase();
     if (s === 'cricket' || s === 'badminton') {
-      filter.sportType = s;
+      filter.sportType = { $in: [s, 'general'] };
     } else if (s === 'general') {
       filter.sportType = 'general';
     } else {

@@ -657,13 +657,18 @@ const updateProfile = asyncHandler(async (req, res) => {
 });
 
 const uploadProfilePhoto = asyncHandler(async (req, res) => {
-  if (!req.file) {
+  let url = '';
+  if (req.file) {
+    url = `/uploads/${req.file.filename}`;
+  } else if (req.body.profilePhotoUrl && typeof req.body.profilePhotoUrl === 'string') {
+    url = req.body.profilePhotoUrl.trim();
+  }
+  if (!url) {
     return res.status(400).json({
       success: false,
       message: 'No image received. Choose a JPG/PNG/WebP file under 8 MB.',
     });
   }
-  const url = `/uploads/${req.file.filename}`;
   const profile = await CoachProfile.findOneAndUpdate(
     { user: req.user.id },
     { profilePhotoUrl: url },

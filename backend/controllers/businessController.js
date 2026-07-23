@@ -537,11 +537,17 @@ const listOrders = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .populate({
       path: 'player',
-      select: 'email createdAt',
-      populate: {
-        path: 'playerProfile',
-        select: 'fullName phone sportPreference skillLevel city address',
-      },
+      select: 'email createdAt role',
+      populate: [
+        {
+          path: 'playerProfile',
+          select: 'fullName phone sportPreference skillLevel city address',
+        },
+        {
+          path: 'coachProfile',
+          select: 'fullName phone specialties city address academyName academyLocation',
+        },
+      ],
     })
     .lean();
   const data = await enrichOrderItemsWithImages(list, Product);

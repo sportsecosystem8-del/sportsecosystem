@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import EasypaisaPaySection from '../../components/payment/EasypaisaPaySection';
@@ -19,6 +19,12 @@ const SHIPPING_FIELDS = [
 
 /** Browse, filter, cart, Easypaisa checkout to store owner */
 export default function PlayerShop() {
+  const location = useLocation();
+  const isCoach = location.pathname.startsWith('/coach');
+  
+  const baseApi = useMemo(() => isCoach ? '/coach' : '/players', [isCoach]);
+  const storePrefix = useMemo(() => isCoach ? '/coach/shop/store/' : '/player/shop/store/', [isCoach]);
+
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
   const [err, setErr] = useState('');
@@ -50,29 +56,40 @@ export default function PlayerShop() {
     return p;
   }, [sport, q, category]);
 
-  const load = () => {
+  const load = useCallback(() => {
+    const abortController = new AbortController();
+    setErr('');
     api
-      .get('/players/products', { params })
-      .then((r) => setProducts(r.data.data || []))
-      .catch((e) => setErr(getErrorMessage(e)));
-  };
-
-  useEffect(() => {
-    load();
-  }, [sport, q, category]);
-
-  useEffect(() => {
-    api
-      .get('/players/me/profile')
+      .get(`${baseApi}/products`, { params, signal: abortController.signal })
       .then((r) => {
-        const sp = r.data?.data?.sportPreference;
+        setProducts(r.data.data || []);
+      })
+      .catch((e) => {
+        if (e.name !== 'AbortError') {
+          setErr(getErrorMessage(e));
+        }
+      });
+    return () => abortController.abort();
+  }, [baseApi, params]);
+
+  useEffect(() => {
+    const cleanup = load();
+    return cleanup;
+  }, [load]);
+
+  useEffect(() => {
+    const profEndpoint = isCoach ? '/coach/me/profile' : '/players/me/profile';
+    api
+      .get(profEndpoint)
+      .then((r) => {
+        const sp = r.data?.data?.sportPreference || (Array.isArray(r.data?.data?.specialties) ? r.data.data.specialties[0] : '');
         if (sp) {
           setSport(sp);
           setProfileSport(sp);
         }
       })
       .catch(() => {});
-  }, []);
+  }, [isCoach]);
 
   const cartItems = () =>
     Object.entries(cart)
@@ -109,7 +126,7 @@ export default function PlayerShop() {
     setPayLoading(true);
     setPayErr('');
     api
-      .post('/players/orders/easypaisa/initiate', { items })
+      .post(`${baseApi}/orders/easypaisa/initiate`, { items })
       .then((r) => {
         const session = r.data?.data || null;
         setPaySession(session);
@@ -122,7 +139,7 @@ export default function PlayerShop() {
         setErr(msg);
       })
       .finally(() => setPayLoading(false));
-  }, [showCheckout, cart, ship, shippingValid]);
+  }, [showCheckout, cart, ship, shippingValid, baseApi]);
 
   const placePaidOrder = async (paymentPayload) => {
     const items = cartItems();
@@ -131,7 +148,7 @@ export default function PlayerShop() {
     setOk('');
     setPlacing(true);
     try {
-      await api.post('/players/orders', {
+      await api.post(`${baseApi}/orders`, {
         items,
         paymentMethod: 'easypaisa',
         shippingAddress: ship,
@@ -218,7 +235,7 @@ export default function PlayerShop() {
               </button>
               {p.businessOwner ? (
                 <Link
-                  to={`/player/shop/store/${p.businessOwner}`}
+                  to={`${storePrefix}${p.businessOwner}`}
                   className="mt-2 block text-center text-xs font-semibold uppercase tracking-wider text-slate-400 underline hover:text-player-green"
                 >
                   Visit store

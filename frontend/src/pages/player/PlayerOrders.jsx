@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import PlayerCard from '../../components/player/PlayerCard';
 import PlayerPageHeader from '../../components/player/PlayerPageHeader';
 import ProductImage from '../../components/ProductImage';
@@ -6,15 +7,17 @@ import { formatProductPrice } from '../../utils/productCurrency';
 import { api, getErrorMessage } from '../../services/api';
 
 export default function PlayerOrders() {
+  const location = useLocation();
+  const endpoint = location.pathname.startsWith('/coach') ? '/coach/orders' : '/players/orders';
   const [orders, setOrders] = useState([]);
   const [err, setErr] = useState('');
 
   useEffect(() => {
     api
-      .get('/players/orders')
+      .get(endpoint)
       .then((r) => setOrders(r.data.data || []))
       .catch((e) => setErr(getErrorMessage(e)));
-  }, []);
+  }, [endpoint]);
 
   return (
     <div>
